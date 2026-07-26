@@ -237,6 +237,27 @@ declare global {
         // returns the most-installed themes.
         searchMarketplace: (query: string) => Promise<DesktopMarketplaceSearchItem[]>
       }
+      orghumans?: {
+        createOrg: (args: {
+          name: string
+          description: string
+          orgType: string
+          creatorUsername: string
+          brandIdentity?: Record<string, unknown>
+          glossary?: Array<{ term: string; definition: string }>
+        }) => Promise<{ ok: boolean; org?: any; error?: string }>
+        joinOrg: (args: { inviteKey: string; username: string }) => Promise<{ ok: boolean; joined?: any; error?: string }>
+        listOrgs: () => Promise<{ ok: boolean; orgs?: any[]; error?: string }>
+        listAvailableIntegrations: () => Promise<{ ok: boolean; integrations?: any[]; error?: string }>
+        listConnectedIntegrations: (profileId: string) => Promise<{ ok: boolean; connected?: any[]; error?: string }>
+        initiateOAuth: (args: { provider: string; profileId: string }) => Promise<{ ok: boolean; url?: string; error?: string }>
+        disconnectIntegration: (args: { provider: string; profileId: string }) => Promise<{ ok: boolean; error?: string }>
+        hasComposioKey: (profileId: string) => Promise<{ ok: boolean; hasKey?: boolean; error?: string }>
+        setComposioKey: (args: { profileId: string; apiKey: string }) => Promise<{ ok: boolean; error?: string }>
+        listOrgIntegrations: (orgId: string) => Promise<{ ok: boolean; integrations?: any[]; error?: string }>
+        setOrgMemberPermission: (args: { orgId: string; provider: string; username: string; canRead: boolean; canWrite: boolean }) => Promise<{ ok: boolean; error?: string }>
+        syncStatus: (orgId: string) => Promise<{ ok: boolean; sync_ready?: boolean; error?: string }>
+      }
     }
   }
 }

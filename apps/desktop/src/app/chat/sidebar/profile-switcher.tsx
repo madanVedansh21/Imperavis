@@ -64,6 +64,8 @@ import type { ProfileInfo } from '@/types/hermes'
 import { CreateProfileDialog } from '../../profiles/create-profile-dialog'
 import { DeleteProfileDialog } from '../../profiles/delete-profile-dialog'
 import { RenameProfileDialog } from '../../profiles/rename-profile-dialog'
+import { CreateOrgDialog } from '@/app/orghumans/create-org-dialog'
+import { JoinOrgDialog } from '@/app/orghumans/join-org-dialog'
 import { PROFILES_ROUTE } from '../../routes'
 
 import { useProfilePrewarm } from './use-profile-prewarm'
@@ -115,6 +117,8 @@ export function ProfileRail() {
   const navigate = useNavigate()
 
   const [createOpen, setCreateOpen] = useState(false)
+  const [createOrgOpen, setCreateOrgOpen] = useState(false)
+  const [joinOrgOpen, setJoinOrgOpen] = useState(false)
   const [pendingRename, setPendingRename] = useState<null | ProfileInfo>(null)
   const [pendingDelete, setPendingDelete] = useState<null | ProfileInfo>(null)
   const [pendingSoul, setPendingSoul] = useState<null | string>(null)
@@ -262,7 +266,11 @@ export function ProfileRail() {
             onSelect={selectProfile}
             profiles={named}
           />
-          <AddProfileButton label={p.newProfile} onClick={() => setCreateOpen(true)} />
+          <AddProfileButton
+            onCreatePersonal={() => setCreateOpen(true)}
+            onCreateOrg={() => setCreateOrgOpen(true)}
+            onJoinOrg={() => setJoinOrgOpen(true)}
+          />
         </div>
       ) : (
         <div
@@ -300,7 +308,11 @@ export function ProfileRail() {
             </DndContext>
           )}
 
-          <AddProfileButton label={p.newProfile} onClick={() => setCreateOpen(true)} />
+          <AddProfileButton
+            onCreatePersonal={() => setCreateOpen(true)}
+            onCreateOrg={() => setCreateOrgOpen(true)}
+            onJoinOrg={() => setJoinOrgOpen(true)}
+          />
         </div>
       )}
 
@@ -321,6 +333,9 @@ export function ProfileRail() {
         open={createOpen}
         profiles={profiles}
       />
+
+      <CreateOrgDialog open={createOrgOpen} onClose={() => setCreateOrgOpen(false)} onCreated={refreshActiveProfile} />
+      <JoinOrgDialog open={joinOrgOpen} onClose={() => setJoinOrgOpen(false)} onJoined={refreshActiveProfile} />
 
       <RenameProfileDialog
         currentName={pendingRename?.name ?? ''}
@@ -418,19 +433,56 @@ function EditSoulDialog({ onClose, profileName }: { onClose: () => void; profile
   )
 }
 
-// The "+" create button, shared by both rail render paths.
-function AddProfileButton({ label, onClick }: { label: string; onClick: () => void }) {
+// The "+" create button with dropdown options.
+function AddProfileButton({
+  onCreatePersonal,
+  onCreateOrg,
+  onJoinOrg,
+}: {
+  onCreatePersonal: () => void
+  onCreateOrg: () => void
+  onJoinOrg: () => void
+}) {
+  const [open, setOpen] = useState(false)
+
   return (
-    <Tip label={label}>
-      <button
-        aria-label={label}
-        className="grid size-5 shrink-0 place-items-center rounded-[3px] text-(--ui-text-tertiary) opacity-55 transition hover:bg-(--ui-control-hover-background) hover:text-foreground hover:opacity-100"
-        onClick={onClick}
-        type="button"
-      >
-        <Codicon name="add" size="0.75rem" />
-      </button>
-    </Tip>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverAnchor asChild>
+        <Tip label="Add Workspace / Profile">
+          <button
+            aria-label="Add Workspace"
+            className="grid size-5 shrink-0 place-items-center rounded-[3px] text-(--ui-text-tertiary) opacity-55 transition hover:bg-(--ui-control-hover-background) hover:text-foreground hover:opacity-100"
+            onClick={() => setOpen(prev => !prev)}
+            type="button"
+          >
+            <Codicon name="add" size="0.75rem" />
+          </button>
+        </Tip>
+      </PopoverAnchor>
+      <PopoverContent className="w-48 p-1 text-xs" side="top">
+        <button
+          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-(--ui-control-hover-background)"
+          onClick={() => { setOpen(false); onCreatePersonal(); }}
+        >
+          <Codicon name="person" size="0.875rem" />
+          <span>New Personal Profile</span>
+        </button>
+        <button
+          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-(--ui-control-hover-background)"
+          onClick={() => { setOpen(false); onCreateOrg(); }}
+        >
+          <Codicon name="organization" size="0.875rem" />
+          <span>Create Organisation</span>
+        </button>
+        <button
+          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-(--ui-control-hover-background)"
+          onClick={() => { setOpen(false); onJoinOrg(); }}
+        >
+          <Codicon name="key" size="0.875rem" />
+          <span>Join Organisation</span>
+        </button>
+      </PopoverContent>
+    </Popover>
   )
 }
 

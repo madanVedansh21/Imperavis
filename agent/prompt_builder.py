@@ -2029,6 +2029,10 @@ def build_context_files_prompt(
 
     SOUL.md from HERMES_HOME is independent and always included when present.
 
+    OrgHumans org context is appended last when an org profile is active.
+    This injection is strictly additive and has no effect on personal profiles
+    or standard Hermes installs without OrgHumans.
+
     Each context source is capped before injection. The cap defaults to the
     model's context window (scaled — see ``_dynamic_context_file_max_chars``)
     when *context_length* is provided, falling back to 20,000 chars otherwise.
@@ -2085,6 +2089,21 @@ def build_context_files_prompt(
         if soul_content:
             sections.append(soul_content)
 
+    # ── OrgHumans: inject org context for org profiles (additive) ────────────
+    # Lazy import to avoid circular imports. Returns "" if OrgHumans is not
+    # active, if the active profile is personal, or on any error.
+    try:
+        from hermes_constants import is_orghumans_active as _is_orghumans_active
+        if _is_orghumans_active():
+            from orghumans.context_builder import build_org_context_for_active_profile
+            org_context = build_org_context_for_active_profile()
+            if org_context:
+                sections.append(org_context)
+    except Exception as _exc:  # noqa: BLE001
+        logger.debug("OrgHumans org context injection skipped: %s", _exc)
+    # ─────────────────────────────────────────────────────────────────────────
+
     if not sections:
         return ""
     return "# Project Context\n\nThe following project context files have been loaded and should be followed:\n\n" + "\n".join(sections)
+

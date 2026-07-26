@@ -12,6 +12,9 @@ import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/component
 import { GlyphSpinner } from '@/components/ui/glyph-spinner'
 import { KbdGroup } from '@/components/ui/kbd'
 import { SearchField } from '@/components/ui/search-field'
+import { IntegrationsDialog } from '@/app/orghumans/integrations-dialog'
+import { CreateOrgDialog } from '@/app/orghumans/create-org-dialog'
+import { JoinOrgDialog } from '@/app/orghumans/join-org-dialog'
 import {
   Sidebar,
   SidebarContent,
@@ -167,6 +170,12 @@ const SIDEBAR_NAV: SidebarNavItem[] = [
     icon: props => <Codicon name="files" {...props} />,
     route: ARTIFACTS_ROUTE,
     keybindActionId: 'nav.artifacts'
+  },
+  {
+    id: 'integrations',
+    label: 'Integrations',
+    icon: props => <Codicon name="plug" {...props} />,
+    action: 'integrations' as any
   }
 ]
 
@@ -256,6 +265,7 @@ export function ChatSidebar({
   const { t } = useI18n()
   const s = t.sidebar
   const { pathname } = useLocation()
+  const [integrationsOpen, setIntegrationsOpen] = useState(false)
   // Contributed nav rows (plugins pairing a page with a sidebar entry) render
   // below the built-ins with the same chrome; active = at their route.
   const navContributions = useContributions(SIDEBAR_NAV_AREA)
@@ -1128,10 +1138,10 @@ export function ChatSidebar({
                         'cursor-default hover:border-transparent hover:bg-transparent hover:text-inherit'
                     )}
                     onClick={() => {
-                      // A plain new session lands in whatever profile the live
-                      // gateway is on (= the active switcher context). null →
-                      // no swap. The switcher header is the single place to
-                      // change which profile that is.
+                      if (item.id === 'integrations') {
+                        setIntegrationsOpen(true)
+                        return
+                      }
                       if (isNewSession) {
                         $newChatProfile.set(null)
                       }
@@ -1490,6 +1500,7 @@ export function ChatSidebar({
         </div>
       </SidebarContent>
       <ProjectDialog />
+      <IntegrationsDialog open={integrationsOpen} onClose={() => setIntegrationsOpen(false)} />
     </Sidebar>
   )
 }

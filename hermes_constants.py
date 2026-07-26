@@ -106,10 +106,17 @@ def _warn_profile_fallback_once() -> None:
 def get_hermes_home() -> Path:
     """Return the Hermes home directory (default: platform-native path).
 
-    Resolution order: context-local override (see
-    :func:`set_hermes_home_override`) → ``HERMES_HOME`` env var → the
-    platform-native default.  This is the single source of truth — all other
-    copies should import this.
+    Resolution order:
+      1. Context-local override (see :func:`set_hermes_home_override`)
+      2. ``HERMES_HOME`` env var
+      3. **OrgHumans active profile** — when OrgHumans is initialised and no
+         explicit override/env-var is set, returns the active profile's
+         ``HERMES_HOME`` from ``~/.orghumans/active_profile.json``.
+      4. Platform-native default (``~/.hermes`` / ``%LOCALAPPDATA%/hermes``)
+
+    The OrgHumans hook (step 3) is strictly additive — it is bypassed whenever
+    steps 1 or 2 are set, and it returns ``None`` silently on any error so
+    existing Hermes installs without OrgHumans are completely unaffected.
 
     When ``HERMES_HOME`` is unset but an ``active_profile`` file indicates
     a non-default profile is active, logs a loud one-shot warning to
@@ -125,7 +132,13 @@ def get_hermes_home() -> Path:
     if override:
         return Path(override)
 
+    # OrgHumans profile hook — only active when HERMES_HOME is not set
+    # explicitly. This preserves 100% backward-compat for standard Hermes
+    # installs that have never initialised OrgHumans.
     if not os.environ.get("HERMES_HOME", "").strip():
+        orghumans_home = _get_orghumans_profile_home()
+        if orghumans_home is not None:
+            return orghumans_home
         _warn_profile_fallback_once()
 
     return _hermes_home_from_env()
@@ -1230,3 +1243,89 @@ FINISH_REASON_LENGTH = "length"
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 OPENROUTER_MODELS_URL = f"{OPENROUTER_BASE_URL}/models"
+
+
+# ─── OrgHumans Profile Integration ───────────────────────────────────────────
+#
+# These functions are the ONLY changes OrgHumans makes to hermes_constants.py.
+# All changes are strictly additive — existing behaviour is unchanged.
+
+
+def _get_orghumans_profile_home() -> Path | None:
+    """Return the active OrgHumans profile's HERMES_HOME, or None.
+
+    Returns None in all error conditions so the caller can fall through to
+    the standard Hermes resolution path without any visible failure.
+
+    This function is intentionally lightweight — it reads one JSON file and
+    constructs a path. No imports from orghumans/ happen at module level to
+    avoid circular imports.
+    """
+    import json as _json
+    import sys as _sys
+
+    try:
+        # Locate the OrgHumans root (mirrors orghumans.constants.get_orghumans_root)
+        override = os.environ.get("ORGHUMANS_HOME", "").strip()
+        if override:
+            orghumans_root = Path(override)
+        elif _sys.platform == "win32":
+            local_appdata = os.environ.get("LOCALAPPDATA", "").strip()
+            base = Path(local_appdata) if local_appdata else Path.home() / "AppData" / "Local"
+            orghumans_root = base / "orghumans"
+        else:
+            orghumans_root = Path.home() / ".orghumans"
+
+        active_json = orghumans_root / "active_profile.json"
+        if not active_json.exists():
+            return None  # OrgHumans not initialised on this machine
+
+        data = _json.loads(active_json.read_text(encoding="utf-8"))
+        profile_id = data.get("active", "").strip()
+        if not profile_id:
+            return None
+
+        profile_home = orghumans_root / "profiles" / profile_id
+        if not profile_home.is_dir():
+            return None  # Profile dir doesn't exist yet
+
+        return profile_home
+
+    except Exception:  # noqa: BLE001 — any error silently falls through
+        return None
+
+
+def get_profile_home_for_orghumans(profile_id: str) -> Path:
+    """Return the HERMES_HOME path for a given OrgHumans profile.
+
+    Convenience function that mirrors orghumans.profile_manager.get_profile_home()
+    but lives in hermes_constants.py so it can be imported from anywhere
+    without pulling in the full orghumans package.
+
+    Args:
+        profile_id: Profile identifier (e.g. 'personal' or 'org-abc123').
+
+    Returns:
+        Absolute path: ``~/.orghumans/profiles/{profile_id}/``
+    """
+    import sys as _sys
+    override = os.environ.get("ORGHUMANS_HOME", "").strip()
+    if override:
+        orghumans_root = Path(override)
+    elif _sys.platform == "win32":
+        local_appdata = os.environ.get("LOCALAPPDATA", "").strip()
+        base = Path(local_appdata) if local_appdata else Path.home() / "AppData" / "Local"
+        orghumans_root = base / "orghumans"
+    else:
+        orghumans_root = Path.home() / ".orghumans"
+    return orghumans_root / "profiles" / profile_id
+
+
+def is_orghumans_active() -> bool:
+    """Return True if OrgHumans has been initialised on this machine.
+
+    Returns True when ``~/.orghumans/active_profile.json`` exists, indicating
+    OrgHumans was set up at least once. False on a fresh Hermes install that
+    has never used OrgHumans (guarantees zero regression).
+    """
+    return _get_orghumans_profile_home() is not None

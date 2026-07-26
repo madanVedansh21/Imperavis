@@ -277,7 +277,57 @@ export const slateTheme: DesktopTheme = {
   }
 }
 
+/**
+ * OrgHumans — liquid glass dark identity.
+ * Base: #0a0a0a · Accent: #7c6bff (violet-purple) · Font: Inter.
+ * Colors are tuned so that the existing backdrop-filter surfaces pick up
+ * a deep-void, glass-refraction look out of the box with no extra CSS.
+ */
+const ORG_ACCENT = '#7c6bff'
+const orgTint = (pct: number) => `color-mix(in srgb, ${ORG_ACCENT} ${pct}%, #0a0a0a)`
+const orgTintTransparent = (pct: number) => `color-mix(in srgb, ${ORG_ACCENT} ${pct}%, transparent)`
+
+export const orghumansTheme: DesktopTheme = {
+  name: 'orghumans',
+  label: 'OrgHumans',
+  description: 'Liquid glass dark — deep void with violet-purple accents',
+  colors: {
+    background: '#0a0a0a',
+    foreground: '#e8e6ff',
+    card: '#111118',
+    cardForeground: '#e8e6ff',
+    muted: '#18181f',
+    mutedForeground: '#9590b8',
+    popover: '#13131a',
+    popoverForeground: '#e8e6ff',
+    primary: ORG_ACCENT,
+    primaryForeground: '#ffffff',
+    secondary: orgTint(12),
+    secondaryForeground: '#ccc8f0',
+    accent: orgTint(18),
+    accentForeground: '#d8d4ff',
+    border: orgTintTransparent(16),
+    input: orgTintTransparent(12),
+    ring: ORG_ACCENT,
+    midground: ORG_ACCENT,
+    composerRing: ORG_ACCENT,
+    destructive: '#e05375',
+    destructiveForeground: '#ffffff',
+    sidebarBackground: '#06060c',
+    sidebarBorder: orgTintTransparent(12),
+    userBubble: orgTint(14),
+    userBubbleBorder: orgTintTransparent(28)
+  },
+  typography: {
+    fontSans: `"Inter", "Inter Variable", ${SYSTEM_SANS}`,
+    fontMono: `"JetBrains Mono", ${SYSTEM_MONO}`,
+    fontUrl:
+      'https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600&display=swap'
+  }
+}
+
 export const BUILTIN_THEMES: Record<string, DesktopTheme> = {
+  orghumans: orghumansTheme,
   nous: nousTheme,
   midnight: midnightTheme,
   ember: emberTheme,
@@ -289,4 +339,4 @@ export const BUILTIN_THEMES: Record<string, DesktopTheme> = {
 export const BUILTIN_THEME_LIST = Object.values(BUILTIN_THEMES)
 
 /** Skin used when nothing is persisted or the persisted name is retired. */
-export const DEFAULT_SKIN_NAME = 'nous'
+export const DEFAULT_SKIN_NAME = 'orghumans'

@@ -38,6 +38,7 @@ import { waitForHermesReady } from './backend-health'
 import { canImportHermesCli, shouldTrustHermesOverride, verifyHermesCli } from './backend-probes'
 import { waitForDashboardPortAnnouncement } from './backend-ready'
 import { shouldLatchBackendStartFailure } from './backend-start-failure'
+import { registerOrghumansIpc } from './orghumans-ipc'
 import { detectRemoteDisplay, isWindowsBinaryPathInWsl, isWslEnvironment } from './bootstrap-platform'
 import { runBootstrap } from './bootstrap-runner'
 import { applyConnectionChange, resolveTerminalConnection } from './connection-apply'
@@ -10820,6 +10821,7 @@ app.on('open-url', (event, url) => {
 })
 
 app.whenReady().then(() => {
+  registerOrghumansIpc()
   const systemCa = installWindowsSystemCaTrust(tls)
 
   if (systemCa.applied) {

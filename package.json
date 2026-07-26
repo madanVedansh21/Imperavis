@@ -35,6 +35,7 @@
   },
   "homepage": "https://github.com/NousResearch/Hermes-Agent#readme",
   "dependencies": {
+    "@rolldown/binding-win32-x64-msvc": "^1.2.0",
     "@streamdown/math": "^1.0.2",
     "agent-browser": "^0.26.0"
   },

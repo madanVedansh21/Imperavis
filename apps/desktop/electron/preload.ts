@@ -268,5 +268,19 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
   themes: {
     fetchMarketplace: id => ipcRenderer.invoke('hermes:vscode-theme:fetch', id),
     searchMarketplace: query => ipcRenderer.invoke('hermes:vscode-theme:search', query)
+  },
+  orghumans: {
+    createOrg: args => ipcRenderer.invoke('orghumans:org:create', args),
+    joinOrg: args => ipcRenderer.invoke('orghumans:org:join', args),
+    listOrgs: () => ipcRenderer.invoke('orghumans:org:list'),
+    listAvailableIntegrations: () => ipcRenderer.invoke('orghumans:integrations:listAvailable'),
+    listConnectedIntegrations: profileId => ipcRenderer.invoke('orghumans:integrations:listConnected', profileId),
+    initiateOAuth: args => ipcRenderer.invoke('orghumans:integrations:initiateOAuth', args),
+    disconnectIntegration: args => ipcRenderer.invoke('orghumans:integrations:disconnect', args),
+    hasComposioKey: profileId => ipcRenderer.invoke('orghumans:integrations:hasComposioKey', profileId),
+    setComposioKey: args => ipcRenderer.invoke('orghumans:integrations:setComposioKey', args),
+    listOrgIntegrations: orgId => ipcRenderer.invoke('orghumans:org:integrations:list', orgId),
+    setOrgMemberPermission: args => ipcRenderer.invoke('orghumans:org:integrations:setPermission', args),
+    syncStatus: orgId => ipcRenderer.invoke('orghumans:sync:status', orgId)
   }
 })
