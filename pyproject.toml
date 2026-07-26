@@ -137,6 +137,8 @@ dependencies = [
   # Hence the ``sys_platform == 'win32'`` marker: the dep (and its portalocker
   # / pywin32 tree) ships only where it's actually used.
   "concurrent-log-handler==0.9.29; sys_platform == 'win32'",
+  # OrgHumans Composio integration suite for OAuth apps & integrations
+  "composio-core",
 ]
 
 [project.optional-dependencies]

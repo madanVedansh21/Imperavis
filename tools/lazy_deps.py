@@ -95,6 +95,9 @@ logger = logging.getLogger(__name__)
 
 
 LAZY_DEPS: dict[str, tuple[str, ...]] = {
+    # ─── OrgHumans Integrations ────────────────────────────────────────────
+    "orghumans.composio": ("composio-core",),
+
     # ─── Inference providers ───────────────────────────────────────────────
     # Native Anthropic SDK — needed when provider=anthropic (not via
     # OpenRouter / aggregators which use the openai SDK).

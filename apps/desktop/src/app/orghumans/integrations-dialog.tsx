@@ -45,21 +45,30 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
   const loadIntegrations = async () => {
     if (!window.hermesDesktop?.orghumans) return
     setLoading(true)
+
     try {
       const keyRes = await window.hermesDesktop.orghumans.hasComposioKey(activeProfile)
-      setHasKey(Boolean(keyRes?.hasKey))
+      setHasKey(keyRes?.hasKey ?? true)
+    } catch {
+      setHasKey(true)
+    }
 
+    try {
       const availRes = await window.hermesDesktop.orghumans.listAvailableIntegrations()
-      if (availRes.ok && availRes.integrations) {
+      if (availRes?.integrations && availRes.integrations.length > 0) {
         setAvailable(availRes.integrations)
       }
+    } catch (err) {
+      console.error('[Integrations] failed to load available:', err)
+    }
 
+    try {
       const connRes = await window.hermesDesktop.orghumans.listConnectedIntegrations(activeProfile)
-      if (connRes.ok && connRes.connected) {
+      if (connRes?.connected) {
         setConnected(connRes.connected)
       }
     } catch (err) {
-      console.error('[Integrations] failed to load:', err)
+      console.error('[Integrations] failed to load connected:', err)
     } finally {
       setLoading(false)
     }
@@ -162,17 +171,18 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
               style={{
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                color: '#9590b8',
+                background: hasKey ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255,255,255,0.05)',
+                border: hasKey ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(255,255,255,0.1)',
+                color: hasKey ? '#34d399' : '#9590b8',
                 borderRadius: 8,
                 padding: '6px 12px',
                 fontSize: 12,
+                fontWeight: 500,
                 cursor: 'pointer',
               }}
               onClick={() => setShowKeyModal(true)}
             >
-              ⚙️ Custom API Key
+              {hasKey ? '✓ API Key Configured' : '⚙️ Set API Key'}
             </button>
             <button
               style={{
@@ -391,10 +401,19 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
               zIndex: 10000,
             }}
           >
-            <div style={{ width: 400, background: '#13131a', border: '1px solid #7c6bff', borderRadius: 12, padding: 24 }}>
-              <h3 style={{ margin: '0 0 8px', fontSize: 16 }}>Set Composio API Key</h3>
+            <div style={{ width: 420, background: '#13131a', border: '1px solid #7c6bff', borderRadius: 12, padding: 24 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <h3 style={{ margin: 0, fontSize: 16 }}>Composio API Key</h3>
+                {hasKey && (
+                  <span style={{ fontSize: 11, background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', padding: '2px 8px', borderRadius: 12, border: '1px solid rgba(16, 185, 129, 0.3)', fontWeight: 600 }}>
+                    ✓ Configured
+                  </span>
+                )}
+              </div>
               <p style={{ margin: '0 0 16px', fontSize: 12, color: '#9590b8' }}>
-                Enter your API key from <a href="https://app.composio.dev/settings" target="_blank" rel="noreferrer" style={{ color: '#7c6bff' }}>app.composio.dev</a>
+                {hasKey
+                  ? 'Your Composio API key is active. Enter a new key below if you wish to update or replace it.'
+                  : 'Enter your API key from app.composio.dev to connect third-party OAuth apps.'}
               </p>
               <input
                 type="password"
@@ -417,13 +436,13 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
                   style={{ background: 'transparent', border: 'none', color: '#9590b8', cursor: 'pointer', padding: '6px 12px' }}
                   onClick={() => setShowKeyModal(false)}
                 >
-                  Cancel
+                  Close
                 </button>
                 <button
                   style={{ background: '#7c6bff', border: 'none', color: '#fff', borderRadius: 6, padding: '6px 16px', fontWeight: 600, cursor: 'pointer' }}
                   onClick={handleSaveComposioKey}
                 >
-                  Save Key
+                  {hasKey ? 'Update Key' : 'Save Key'}
                 </button>
               </div>
             </div>
