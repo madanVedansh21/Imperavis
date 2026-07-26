@@ -198,8 +198,8 @@ print(json.dumps(get_connected_integrations(${JSON.stringify(profileId)})))
         }
       }
     }
-    // 3. Built-in master key
-    return 'ak_z63IvVDUYaI4ifVggHw_'
+    // 3. No built-in fallback — user must supply their own Composio API key
+    return ''
   }
 
   function writeComposioKey(profileId: string, apiKey: string): void {
@@ -235,7 +235,7 @@ print(json.dumps(get_connected_integrations(${JSON.stringify(profileId)})))
           await runOrghumans(`
 from orghumans.db.integrations_db import upsert_connection
 upsert_connection(${JSON.stringify(profileId)}, ${JSON.stringify(provider)}, status='active')
-print('ok')
+print(json.dumps({'ok': True}))
 `)
         } catch { /* non-fatal */ }
         return { ok: true, url, composioKey: !!composioKey }
@@ -267,7 +267,7 @@ print(json.dumps({'ok': True}))
       const key = readComposioKey(profileId)
       return { ok: true, hasKey: Boolean(key) }
     } catch (err) {
-      return { ok: true, hasKey: true }
+      return { ok: true, hasKey: false }
     }
   })
 
@@ -282,7 +282,7 @@ print(json.dumps({'ok': True}))
           await runOrghumans(`
 from orghumans.composio_client import set_composio_api_key
 set_composio_api_key(${JSON.stringify(profileId)}, ${JSON.stringify(apiKey)})
-print('ok')
+print(json.dumps({'ok': True}))
 `)
         } catch { /* non-fatal */ }
         return { ok: true }

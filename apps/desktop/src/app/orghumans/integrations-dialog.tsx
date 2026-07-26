@@ -41,6 +41,7 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
   const [hasKey, setHasKey] = useState(true)
   const [showKeyModal, setShowKeyModal] = useState(false)
   const [disconnecting, setDisconnecting] = useState<string | null>(null)
+  const [pendingProvider, setPendingProvider] = useState<string | null>(null)
 
   const loadIntegrations = async () => {
     if (!window.hermesDesktop?.orghumans) return
@@ -48,9 +49,9 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
 
     try {
       const keyRes = await window.hermesDesktop.orghumans.hasComposioKey(activeProfile)
-      setHasKey(keyRes?.hasKey ?? true)
+      setHasKey(keyRes?.hasKey ?? false)
     } catch {
-      setHasKey(true)
+      setHasKey(false)
     }
 
     try {
@@ -85,6 +86,7 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
 
   const handleConnect = async (provider: string) => {
     if (!hasKey) {
+      setPendingProvider(provider)
       setShowKeyModal(true)
       return
     }
@@ -115,6 +117,16 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
       setHasKey(true)
       setShowKeyModal(false)
       setComposioKeyInput('')
+      // Auto-proceed with the connection that triggered the key prompt
+      if (pendingProvider) {
+        const provider = pendingProvider
+        setPendingProvider(null)
+        try {
+          await window.hermesDesktop?.orghumans?.initiateOAuth({ provider, profileId: activeProfile })
+        } catch (err) {
+          console.error('[Integrations] OAuth error after key save:', err)
+        }
+      }
     } catch (err) {
       console.error('[Integrations] Save key error:', err)
     }
