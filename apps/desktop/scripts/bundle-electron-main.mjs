@@ -22,7 +22,7 @@ mkdirSync(distDir, { recursive: true })
 const mainEntry = resolve(root, 'electron/main.ts')
 const mainOut = resolve(distDir, 'electron-main.mjs')
 const preloadEntry = resolve(root, 'electron/preload.ts')
-const preloadOut = resolve(distDir, 'electron-preload.js')
+const preloadOut = resolve(distDir, 'electron-preload.cjs')
 
 const external = ['electron', 'node-pty', 'fs']
 // Production bundles bake packaged=true so unpackaged `electron .` still

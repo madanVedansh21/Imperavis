@@ -1,23 +1,47 @@
-import { ipcMain, shell } from 'electron'
+import { app, ipcMain, shell } from 'electron'
 import { execFile } from 'child_process'
-import { join } from 'path'
+import { existsSync } from 'fs'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
 import { promisify } from 'util'
 
 const execFileAsync = promisify(execFile)
-const REPO_ROOT = join(__dirname, '../../..')
+
+const _currentDir = typeof __dirname !== 'undefined'
+  ? __dirname
+  : dirname(fileURLToPath(import.meta.url))
+
+function getRepoRoot(): string {
+  // If running inside compiled ASAR package
+  if (app && app.isPackaged) {
+    const unpacked = join(process.resourcesPath, 'app.asar.unpacked')
+    if (existsSync(unpacked)) return unpacked
+    return process.resourcesPath
+  }
+  // Development mode
+  return join(_currentDir, '../../..')
+}
+
 const PYTHON_CMD = process.platform === 'win32' ? 'python' : 'python3'
 
 async function runOrghumans(snippet: string): Promise<unknown> {
+  const repoRoot = getRepoRoot()
   const script = `
 import json, sys
-sys.path.insert(0, r'${REPO_ROOT.replace(/\\/g, '\\\\')}')
+sys.path.insert(0, r'${repoRoot.replace(/\\/g, '\\\\')}')
 ${snippet}
 `
-  const { stdout } = await execFileAsync(PYTHON_CMD, ['-c', script], {
-    cwd: REPO_ROOT,
-    timeout: 20_000,
-  })
-  return JSON.parse(stdout.trim())
+  try {
+    const { stdout } = await execFileAsync(PYTHON_CMD, ['-c', script], {
+      cwd: existsSync(repoRoot) ? repoRoot : process.cwd(),
+      timeout: 20_000,
+    })
+    const trimmed = stdout.trim()
+    return trimmed ? JSON.parse(trimmed) : { ok: true }
+  } catch (err) {
+    console.error('runOrghumans error:', err)
+    throw err
+  }
 }
 
 export function registerOrghumansIpc(): void {

@@ -26,7 +26,7 @@ function chatWindowWebPreferences(preloadPath: string) {
     preload: preloadPath,
     contextIsolation: true,
     webviewTag: true,
-    sandbox: true,
+    sandbox: false,
     nodeIntegration: false,
     devTools: true,
     backgroundThrottling: false

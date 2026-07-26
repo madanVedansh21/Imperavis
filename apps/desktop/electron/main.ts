@@ -228,10 +228,20 @@ const IS_WSL = isWslEnvironment()
 const DARWIN_MAJOR = IS_MAC ? Number.parseInt(os.release(), 10) || 0 : 0
 const APP_ROOT = app.getAppPath()
 
-// Preload must be plain JS — Electron's sandbox can't run .ts, and tsx's
-// ESM loader is broken on Electron 40's Node (ERR_INVALID_RETURN_PROPERTY_VALUE).
-// Dev (`npm run dev`) and prod both load the esbuild output from dist/.
-const PRELOAD_PATH = path.join(APP_ROOT, 'dist', 'electron-preload.js')
+function resolvePreloadPath(): string {
+  const candidates = [
+    path.join(APP_ROOT, 'dist', 'electron-preload.cjs'),
+    path.join(APP_ROOT.replace(/app\.asar(?=$|[\\/])/, 'app.asar.unpacked'), 'dist', 'electron-preload.cjs'),
+    path.join(APP_ROOT, 'dist', 'electron-preload.js'),
+    path.join(APP_ROOT.replace(/app\.asar(?=$|[\\/])/, 'app.asar.unpacked'), 'dist', 'electron-preload.js')
+  ]
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c
+  }
+  return candidates[0]
+}
+
+const PRELOAD_PATH = resolvePreloadPath()
 
 // Remote displays (SSH X11 forwarding, VNC, RDP) make Chromium's GPU
 // compositor flicker — accelerated layers can't be presented cleanly over the
@@ -470,6 +480,9 @@ if (INSTALL_STAMP) {
 // HERMES_HOME beneath the throwaway userData dir so a fresh-install run never
 // touches the user's real ~/.hermes / %LOCALAPPDATA%\hermes.
 function resolveHermesHome() {
+  if (process.env.ORGHUMANS_HOME) {
+    return normalizeHermesHomeRoot(process.env.ORGHUMANS_HOME)
+  }
   if (process.env.HERMES_HOME) {
     return normalizeHermesHomeRoot(process.env.HERMES_HOME)
   }
@@ -485,7 +498,7 @@ function resolveHermesHome() {
     // backend silently falls back to %LOCALAPPDATA%\hermes and reports "No
     // inference provider configured" despite a valid configured home (#45471).
     // Consult the live User-scoped registry value before the default below.
-    const fromRegistry = readWindowsUserEnvVar('HERMES_HOME')
+    const fromRegistry = readWindowsUserEnvVar('ORGHUMANS_HOME') || readWindowsUserEnvVar('HERMES_HOME')
 
     if (fromRegistry) {
       return normalizeHermesHomeRoot(fromRegistry)
@@ -493,7 +506,7 @@ function resolveHermesHome() {
   }
 
   if (IS_WINDOWS && process.env.LOCALAPPDATA) {
-    const localappdata = path.join(process.env.LOCALAPPDATA, 'hermes')
+    const localappdata = path.join(process.env.LOCALAPPDATA, 'orghumans')
     const legacy = path.join(app.getPath('home'), '.hermes')
 
     // Migrate transparently to LOCALAPPDATA, but honour an existing legacy
@@ -505,7 +518,7 @@ function resolveHermesHome() {
     return localappdata
   }
 
-  return path.join(app.getPath('home'), '.hermes')
+  return path.join(app.getPath('home'), '.orghumans')
 }
 
 const HERMES_HOME = resolveHermesHome()
@@ -528,7 +541,7 @@ function pathWithHermesManagedNode(...entries) {
 // ACTIVE_HERMES_ROOT — the canonical mutable Hermes install. Same path
 // install.ps1 / install.sh use, so a desktop-only user and a CLI-only user end
 // up with identical layouts and can share one install.
-const ACTIVE_HERMES_ROOT = path.join(HERMES_HOME, 'hermes-agent')
+const ACTIVE_HERMES_ROOT = path.join(HERMES_HOME, 'orghumans-agent')
 // VENV_ROOT — venv lives inside the repo, exactly like install.ps1 does it.
 const VENV_ROOT = path.join(ACTIVE_HERMES_ROOT, 'venv')
 // BOOTSTRAP_COMPLETE_MARKER — written by the first-launch bootstrap runner
@@ -3482,7 +3495,11 @@ function resolveWebDist() {
 }
 
 function resolveRendererIndex() {
-  const candidates = [path.join(APP_ROOT, 'dist', 'index.html'), path.join(resolveWebDist(), 'index.html')]
+  const candidates = [
+    path.join(APP_ROOT, 'dist', 'index.html'),
+    path.join(unpackedPathFor(APP_ROOT), 'dist', 'index.html'),
+    path.join(resolveWebDist(), 'index.html')
+  ]
   const found = candidates.find(fileExists)
 
   if (found) {
@@ -8404,7 +8421,8 @@ function createInstanceWindow() {
   if (DEV_SERVER) {
     win.loadURL(DEV_SERVER)
   } else {
-    win.loadURL(pathToFileURL(resolveRendererIndex()).toString())
+    const idx = resolveRendererIndex()
+    win.loadFile(idx).catch(() => win.loadURL(pathToFileURL(idx).toString()))
   }
 
   return win
@@ -8757,7 +8775,11 @@ function createWindow() {
   if (DEV_SERVER) {
     mainWindow.loadURL(DEV_SERVER)
   } else {
-    mainWindow.loadURL(pathToFileURL(resolveRendererIndex()).toString())
+    const mainIdx = resolveRendererIndex()
+    mainWindow.loadFile(mainIdx).catch(err => {
+      rememberLog(`[renderer loadFile error] ${err}`)
+      mainWindow.loadURL(pathToFileURL(mainIdx).toString())
+    })
   }
 
   // Start the Python backend NOW, in parallel with the renderer load — not on

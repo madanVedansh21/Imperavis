@@ -200,7 +200,7 @@ function installedAgentInstallScript(hermesHome) {
     return null
   }
 
-  const candidate = path.join(hermesHome, 'hermes-agent', 'scripts', installScriptName())
+  const candidate = path.join(hermesHome, 'orghumans-agent', 'scripts', installScriptName())
 
   try {
     fs.accessSync(candidate, fs.constants.R_OK)

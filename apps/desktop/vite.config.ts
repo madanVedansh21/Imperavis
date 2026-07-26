@@ -50,7 +50,6 @@ export default defineConfig({
     // as a regression alarm if the bundle balloons well past today's size.
     chunkSizeWarningLimit: 25000,
     rolldownOptions: {
-      external: ['mermaid'],
       output: {
         codeSplitting: false
       }
