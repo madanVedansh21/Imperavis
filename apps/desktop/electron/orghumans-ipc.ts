@@ -144,17 +144,10 @@ print(json.dumps({'ok': True, 'orgs': list_joined_orgs()}))
     { id: "dropbox", name: "Dropbox", description: "Access and share Dropbox files.", category: "Storage", icon: "📦", color: "#0061FF" },
   ]
 
-  ipcMain.handle('orghumans:integrations:listAvailable', async () => {
-    try {
-      const result = await runOrghumans(`
-from orghumans.composio_client import list_available_integrations
-print(json.dumps(list_available_integrations()))
-`)
-      return { ok: true, integrations: (result as any[]) || STATIC_CATALOGUE }
-    } catch (err) {
-      return { ok: true, integrations: STATIC_CATALOGUE }
-    }
-  })
+  ipcMain.handle('orghumans:integrations:listAvailable', async () =>
+    // Return static catalogue immediately — no Python subprocess needed
+    ({ ok: true, integrations: STATIC_CATALOGUE })
+  )
 
   ipcMain.handle('orghumans:integrations:listConnected', async (_event, profileId: string) => {
     try {
@@ -218,26 +211,74 @@ print(json.dumps(get_connected_integrations(${JSON.stringify(profileId)})))
       lines.push(keyLine)
     }
     writeFileSync(envPath, lines.join('\n'), 'utf-8')
+
+    // Auto-configure Composio Connect MCP Server in profile config.yaml
+    try {
+      const configPath = join(profileHome, 'config.yaml')
+      let configContent = existsSync(configPath) ? readFileSync(configPath, 'utf-8') : ''
+      if (!configContent.includes('connect.composio.dev/mcp')) {
+        const mcpSnippet = `\nmcp_servers:\n  composio:\n    url: "https://connect.composio.dev/mcp"\n    headers:\n      x-api-key: "${apiKey}"\n`
+        configContent = configContent ? `${configContent.trim()}\n${mcpSnippet}` : mcpSnippet.trim()
+        writeFileSync(configPath, configContent, 'utf-8')
+      }
+    } catch { /* non-fatal */ }
   }
 
-  // OAuth: open Composio portal directly in the system browser — no Python needed
+  async function fetchComposioOAuthUrl(apiKey: string, provider: string, profileId: string): Promise<string> {
+    if (!apiKey) {
+      return `https://connect.composio.dev/link?app=${provider.toLowerCase()}`
+    }
+
+    const endpoints = [
+      'https://backend.composio.dev/api/v3/connected_accounts/link',
+      'https://backend.composio.dev/api/v3.1/connected_accounts/link',
+    ]
+
+    const payloads = [
+      { appName: provider.toLowerCase(), user_id: profileId },
+      { appName: provider.toUpperCase(), user_id: profileId },
+      { auth_config_id: provider.toLowerCase(), user_id: profileId },
+    ]
+
+    for (const endpoint of endpoints) {
+      for (const body of payloads) {
+        try {
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'x-api-key': apiKey,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+          })
+
+          if (response.ok) {
+            const data = (await response.json()) as any
+            const redirectUrl =
+              data.redirectUrl ||
+              data.redirect_url ||
+              data.url ||
+              data.data?.redirectUrl ||
+              data.data?.redirect_url
+            if (redirectUrl) return redirectUrl
+          }
+        } catch (err) {
+          console.error(`[Composio] Error requesting OAuth link from ${endpoint}:`, err)
+        }
+      }
+    }
+
+    return `https://connect.composio.dev/link?app=${provider.toLowerCase()}`
+  }
+
+  // OAuth: open direct OAuth flow via Composio v3 API / Composio Connect
   ipcMain.handle(
     'orghumans:integrations:initiateOAuth',
     async (_event, { provider, profileId }: { provider: string; profileId: string }) => {
       try {
         const composioKey = readComposioKey(profileId)
-        // Build the Composio OAuth/portal URL
-        // With a valid API key, Composio's dashboard handles OAuth for the user
-        const url = `https://app.composio.dev/apps/${provider.toLowerCase()}`
+        const url = await fetchComposioOAuthUrl(composioKey, provider, profileId)
         await shell.openExternal(url)
-        // Best-effort: record locally that the user initiated connection
-        try {
-          await runOrghumans(`
-from orghumans.db.integrations_db import upsert_connection
-upsert_connection(${JSON.stringify(profileId)}, ${JSON.stringify(provider)}, status='active')
-print(json.dumps({'ok': True}))
-`)
-        } catch { /* non-fatal */ }
         return { ok: true, url, composioKey: !!composioKey }
       } catch (err) {
         return { ok: false, error: String(err) }
@@ -249,9 +290,29 @@ print(json.dumps({'ok': True}))
     'orghumans:integrations:disconnect',
     async (_event, { provider, profileId }: { provider: string; profileId: string }) => {
       try {
+        // Use only integrations_db.delete_connection — pure SQLite, zero Composio SDK
+        // imports, so this is always fast (< 1s). The old disconnect_integration call
+        // was importing composio-core which hung for 20 s before SIGTERM.
         await runOrghumans(`
-from orghumans.composio_client import disconnect_integration
-disconnect_integration(${JSON.stringify(provider)}, ${JSON.stringify(profileId)})
+from orghumans.db.integrations_db import delete_connection
+delete_connection(${JSON.stringify(profileId)}, ${JSON.stringify(provider)})
+print(json.dumps({'ok': True}))
+`)
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: String(err) }
+      }
+    }
+  )
+
+  // markConnected: called by the UI after the user confirms OAuth in the browser
+  ipcMain.handle(
+    'orghumans:integrations:markConnected',
+    async (_event, { provider, profileId }: { provider: string; profileId: string }) => {
+      try {
+        await runOrghumans(`
+from orghumans.db.integrations_db import upsert_connection
+upsert_connection(${JSON.stringify(profileId)}, ${JSON.stringify(provider)}, status='active')
 print(json.dumps({'ok': True}))
 `)
         return { ok: true }

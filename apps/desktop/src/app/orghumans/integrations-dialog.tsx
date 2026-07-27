@@ -42,6 +42,7 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
   const [showKeyModal, setShowKeyModal] = useState(false)
   const [disconnecting, setDisconnecting] = useState<string | null>(null)
   const [pendingProvider, setPendingProvider] = useState<string | null>(null)
+  const [oauthPendingProvider, setOauthPendingProvider] = useState<string | null>(null)
 
   const loadIntegrations = async () => {
     if (!window.hermesDesktop?.orghumans) return
@@ -91,9 +92,24 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
       return
     }
     try {
+      setOauthPendingProvider(provider)
       await window.hermesDesktop?.orghumans?.initiateOAuth({ provider, profileId: activeProfile })
     } catch (err) {
       console.error('[Integrations] OAuth error:', err)
+    }
+  }
+
+  const handleConfirmConnected = async () => {
+    if (!oauthPendingProvider) return
+    try {
+      await window.hermesDesktop?.orghumans?.markConnected({
+        provider: oauthPendingProvider,
+        profileId: activeProfile,
+      })
+      setOauthPendingProvider(null)
+      await loadIntegrations()
+    } catch (err) {
+      console.error('[Integrations] Mark connected error:', err)
     }
   }
 
@@ -121,6 +137,7 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
       if (pendingProvider) {
         const provider = pendingProvider
         setPendingProvider(null)
+        setOauthPendingProvider(provider)
         try {
           await window.hermesDesktop?.orghumans?.initiateOAuth({ provider, profileId: activeProfile })
         } catch (err) {
@@ -244,6 +261,57 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
             >
               Add API Key
             </button>
+          </div>
+        )}
+
+        {/* OAuth Pending Confirmation Banner */}
+        {oauthPendingProvider && (
+          <div
+            style={{
+              background: 'rgba(16, 185, 129, 0.12)',
+              border: '1px solid rgba(16, 185, 129, 0.4)',
+              borderRadius: 10,
+              padding: '12px 16px',
+              marginBottom: 16,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <span style={{ fontSize: 13, color: '#a7f3d0' }}>
+              🌐 Opened <strong>{oauthPendingProvider}</strong> authorization page in browser. Completed setup?
+            </span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  color: '#9590b8',
+                  border: 'none',
+                  borderRadius: 6,
+                  padding: '6px 10px',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                }}
+                onClick={() => setOauthPendingProvider(null)}
+              >
+                Cancel
+              </button>
+              <button
+                style={{
+                  background: '#10b981',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 6,
+                  padding: '6px 14px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+                onClick={handleConfirmConnected}
+              >
+                ✓ Confirm Connected
+              </button>
+            </div>
           </div>
         )}
 

@@ -149,10 +149,8 @@ def initiate_oauth(provider: str, profile_id: str) -> str:
         logger.warning("Composio SDK initiate_connection failed for %s/%s: %s — using direct portal URL", provider, profile_id, exc)
 
     # Record the connection attempt in local DB so UI shows it connected
-    try:
-        upsert_connection(profile_id, provider, status="active")
-    except Exception:
-        pass
+    # NOTE: Do NOT mark as connected here — user hasn't completed OAuth yet.
+    # The UI will mark it connected after the user confirms in their browser.
 
     # Fallback to direct Composio App portal link
     return f"https://app.composio.dev/apps/{provider.lower()}"
@@ -219,13 +217,10 @@ def disconnect_integration(provider: str, profile_id: str) -> None:
         except Exception as exc:
             logger.debug("Could not remove %s from .env: %s", key, exc)
 
-    # Also try to revoke via Composio SDK (best-effort)
-    try:
-        toolset = _get_composio_toolset(profile_id)
-        entity = toolset.get_entity(id=profile_id)
-        entity.disconnect(app_name=provider.upper())
-    except Exception as exc:
-        logger.debug("Composio SDK revoke failed (non-fatal): %s", exc)
+    # NOTE: We intentionally skip the Composio SDK revoke call here.
+    # The SDK import can hang for 20+ seconds if composio-core is not installed
+    # or the network is slow. The DB delete below is always the authoritative
+    # disconnect action from the desktop app's perspective.
 
     # Always remove from local DB
     delete_connection(profile_id, provider)
@@ -287,15 +282,14 @@ def set_composio_api_key(profile_id: str, api_key: str) -> None:
     logger.info("Composio API key set for profile %s", profile_id)
 
 
-MASTER_COMPOSIO_API_KEY = "ak_z63IvVDUYaI4ifVggHw_"
+MASTER_COMPOSIO_API_KEY = ""  # No built-in key — users must supply their own.
 
 
 def get_composio_api_key(profile_id: str) -> Optional[str]:
     """Return the Composio API key for a profile.
 
-    Defaults to MASTER_COMPOSIO_API_KEY if no custom key is provided in the
-    profile's .env file or environment, enabling zero-friction 1-click
-    integrations for non-technical users out of the box.
+    Checks process environment and the profile's .env file.
+    Returns None if no key is configured — callers must handle this.
     """
     # 1. Check process environment
     env_override = os.environ.get("COMPOSIO_API_KEY", "").strip()
@@ -312,8 +306,8 @@ def get_composio_api_key(profile_id: str) -> Optional[str]:
                 if val:
                     return val
 
-    # 3. Default to built-in Master Key
-    return MASTER_COMPOSIO_API_KEY
+    # 3. No built-in fallback — return None so callers can prompt the user
+    return None
 
 
 def has_composio_api_key(profile_id: str) -> bool:
