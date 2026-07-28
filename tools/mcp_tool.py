@@ -4441,7 +4441,40 @@ def _load_mcp_config() -> Dict[str, dict]:
         config = load_config()
         servers = config.get("mcp_servers")
         if not servers or not isinstance(servers, dict):
-            return {}
+            servers = {}
+        # ── Composio MCP auto-injection ────────────────────────────────────
+        # The Composio API key is owned by the backend and NEVER exposed to
+        # the client.  We inject the MCP server config here using:
+        #   - A hardcoded (backend-owned) x-api-key
+        #   - The client's stable entity_id read from profile.json
+        # If profile.json doesn't exist yet, we skip injection silently.
+        if "composio" not in servers:
+            try:
+                import json as _json
+                from hermes_constants import get_hermes_home
+                profile_id = os.environ.get("HERMES_PROFILE", "default")
+                profile_json_path = get_hermes_home() / "profile.json"
+                entity_id: str | None = None
+                if profile_json_path.exists():
+                    try:
+                        _prof = _json.loads(profile_json_path.read_text(encoding="utf-8"))
+                        entity_id = _prof.get("entity_id")
+                    except Exception:
+                        pass
+                # Replace the placeholder below with your Composio project API key.
+                # This key is owned by your backend — the end-user never sees it.
+                _COMPOSIO_BACKEND_API_KEY = "<YOUR_COMPOSIO_PROJECT_API_KEY>"
+                if entity_id and _COMPOSIO_BACKEND_API_KEY != "<YOUR_COMPOSIO_PROJECT_API_KEY>":
+                    servers["composio"] = {
+                        "url": "https://connect.composio.dev/mcp",
+                        "headers": {
+                            "x-api-key": _COMPOSIO_BACKEND_API_KEY,
+                            "x-entity-id": entity_id,
+                        }
+                    }
+            except Exception:
+                pass
+
         # Ensure .env vars are available for interpolation
         try:
             from hermes_cli.env_loader import load_hermes_dotenv

@@ -251,10 +251,10 @@ declare global {
         listAvailableIntegrations: () => Promise<{ ok: boolean; integrations?: any[]; error?: string }>
         listConnectedIntegrations: (profileId: string) => Promise<{ ok: boolean; connected?: any[]; error?: string }>
         initiateOAuth: (args: { provider: string; profileId: string }) => Promise<{ ok: boolean; url?: string; error?: string }>
+        getIntegrationStatus: (profileId: string) => Promise<{ ok: boolean; connected?: string[]; error?: string }>
         disconnectIntegration: (args: { provider: string; profileId: string }) => Promise<{ ok: boolean; error?: string }>
-        hasComposioKey: (profileId: string) => Promise<{ ok: boolean; hasKey?: boolean; error?: string }>
-        setComposioKey: (args: { profileId: string; apiKey: string }) => Promise<{ ok: boolean; error?: string }>
         markConnected: (args: { provider: string; profileId: string }) => Promise<{ ok: boolean; error?: string }>
+        getEntityId: (profileId: string) => Promise<{ ok: boolean; entityId?: string; error?: string }>
         listOrgIntegrations: (orgId: string) => Promise<{ ok: boolean; integrations?: any[]; error?: string }>
         setOrgMemberPermission: (args: { orgId: string; provider: string; username: string; canRead: boolean; canWrite: boolean }) => Promise<{ ok: boolean; error?: string }>
         syncStatus: (orgId: string) => Promise<{ ok: boolean; sync_ready?: boolean; error?: string }>

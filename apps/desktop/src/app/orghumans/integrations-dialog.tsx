@@ -37,23 +37,12 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
   const [search, setSearch] = useState('')
   const [selectedCat, setSelectedCat] = useState('All')
   const [loading, setLoading] = useState(false)
-  const [composioKey, setComposioKeyInput] = useState('')
-  const [hasKey, setHasKey] = useState(true)
-  const [showKeyModal, setShowKeyModal] = useState(false)
   const [disconnecting, setDisconnecting] = useState<string | null>(null)
-  const [pendingProvider, setPendingProvider] = useState<string | null>(null)
   const [oauthPendingProvider, setOauthPendingProvider] = useState<string | null>(null)
 
   const loadIntegrations = async () => {
     if (!window.hermesDesktop?.orghumans) return
     setLoading(true)
-
-    try {
-      const keyRes = await window.hermesDesktop.orghumans.hasComposioKey(activeProfile)
-      setHasKey(keyRes?.hasKey ?? false)
-    } catch {
-      setHasKey(false)
-    }
 
     try {
       const availRes = await window.hermesDesktop.orghumans.listAvailableIntegrations()
@@ -71,9 +60,17 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
       }
     } catch (err) {
       console.error('[Integrations] failed to load connected:', err)
-    } finally {
-      setLoading(false)
     }
+
+    // Also query backend for live status and sync locally
+    try {
+      await window.hermesDesktop.orghumans.getIntegrationStatus(activeProfile)
+      // Reload local list again after sync
+      const connRes2 = await window.hermesDesktop.orghumans.listConnectedIntegrations(activeProfile)
+      if (connRes2?.connected) setConnected(connRes2.connected)
+    } catch { /* backend unavailable — local cache is authoritative */ }
+
+    setLoading(false)
   }
 
   useEffect(() => {
@@ -86,16 +83,16 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
     connected.some(c => c.provider.toLowerCase() === providerId.toLowerCase() && c.status === 'active')
 
   const handleConnect = async (provider: string) => {
-    if (!hasKey) {
-      setPendingProvider(provider)
-      setShowKeyModal(true)
-      return
-    }
     try {
       setOauthPendingProvider(provider)
-      await window.hermesDesktop?.orghumans?.initiateOAuth({ provider, profileId: activeProfile })
+      const res = await window.hermesDesktop?.orghumans?.initiateOAuth({ provider, profileId: activeProfile })
+      if (!res?.ok) {
+        console.error('[Integrations] OAuth error:', res?.error)
+        setOauthPendingProvider(null)
+      }
     } catch (err) {
       console.error('[Integrations] OAuth error:', err)
+      setOauthPendingProvider(null)
     }
   }
 
@@ -120,32 +117,6 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
       await loadIntegrations()
     } catch (err) {
       console.error('[Integrations] Disconnect error:', err)
-    }
-  }
-
-  const handleSaveComposioKey = async () => {
-    if (!composioKey.trim()) return
-    try {
-      await window.hermesDesktop?.orghumans?.setComposioKey({
-        profileId: activeProfile,
-        apiKey: composioKey.trim(),
-      })
-      setHasKey(true)
-      setShowKeyModal(false)
-      setComposioKeyInput('')
-      // Auto-proceed with the connection that triggered the key prompt
-      if (pendingProvider) {
-        const provider = pendingProvider
-        setPendingProvider(null)
-        setOauthPendingProvider(provider)
-        try {
-          await window.hermesDesktop?.orghumans?.initiateOAuth({ provider, profileId: activeProfile })
-        } catch (err) {
-          console.error('[Integrations] OAuth error after key save:', err)
-        }
-      }
-    } catch (err) {
-      console.error('[Integrations] Save key error:', err)
     }
   }
 
@@ -192,27 +163,15 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>Integrations & Apps</h2>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>Integrations &amp; Apps</h2>
             <p style={{ margin: '4px 0 0', fontSize: 13, color: '#9590b8' }}>
-              Connect your personal accounts via Composio (Profile: <strong>{activeProfile}</strong>)
+              Connect your accounts — authorization is handled securely by the platform.
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button
-              style={{
-                background: hasKey ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255,255,255,0.05)',
-                border: hasKey ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(255,255,255,0.1)',
-                color: hasKey ? '#34d399' : '#9590b8',
-                borderRadius: 8,
-                padding: '6px 12px',
-                fontSize: 12,
-                fontWeight: 500,
-                cursor: 'pointer',
-              }}
-              onClick={() => setShowKeyModal(true)}
-            >
-              {hasKey ? '✓ API Key Configured' : '⚙️ Set API Key'}
-            </button>
+            {loading && (
+              <span style={{ fontSize: 12, color: '#9590b8' }}>Loading…</span>
+            )}
             <button
               style={{
                 background: 'rgba(255,255,255,0.06)',
@@ -229,41 +188,6 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
           </div>
         </div>
 
-        {/* Composio API Key Warning Banner */}
-        {!hasKey && (
-          <div
-            style={{
-              background: 'rgba(124, 107, 255, 0.12)',
-              border: '1px solid rgba(124, 107, 255, 0.3)',
-              borderRadius: 10,
-              padding: '12px 16px',
-              marginBottom: 16,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <span style={{ fontSize: 13, color: '#d8d4ff' }}>
-              🔑 Set your Composio API key to connect third-party OAuth apps.
-            </span>
-            <button
-              style={{
-                background: '#7c6bff',
-                color: '#fff',
-                border: 'none',
-                borderRadius: 6,
-                padding: '6px 12px',
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-              onClick={() => setShowKeyModal(true)}
-            >
-              Add API Key
-            </button>
-          </div>
-        )}
-
         {/* OAuth Pending Confirmation Banner */}
         {oauthPendingProvider && (
           <div
@@ -279,7 +203,7 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
             }}
           >
             <span style={{ fontSize: 13, color: '#a7f3d0' }}>
-              🌐 Opened <strong>{oauthPendingProvider}</strong> authorization page in browser. Completed setup?
+              🌐 Opened <strong>{oauthPendingProvider}</strong> authorization page in your browser. Completed?
             </span>
             <div style={{ display: 'flex', gap: 8 }}>
               <button
@@ -354,7 +278,7 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
           ))}
         </div>
 
-        {/* Integration Tile Grid (App Directory view matching Composio App Store) */}
+        {/* Integration Tile Grid */}
         <div
           style={{
             flex: 1,
@@ -467,67 +391,6 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
             )
           })}
         </div>
-
-        {/* Composio Key Modal */}
-        {showKeyModal && (
-          <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(0,0,0,0.85)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 10000,
-            }}
-          >
-            <div style={{ width: 420, background: '#13131a', border: '1px solid #7c6bff', borderRadius: 12, padding: 24 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <h3 style={{ margin: 0, fontSize: 16 }}>Composio API Key</h3>
-                {hasKey && (
-                  <span style={{ fontSize: 11, background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', padding: '2px 8px', borderRadius: 12, border: '1px solid rgba(16, 185, 129, 0.3)', fontWeight: 600 }}>
-                    ✓ Configured
-                  </span>
-                )}
-              </div>
-              <p style={{ margin: '0 0 16px', fontSize: 12, color: '#9590b8' }}>
-                {hasKey
-                  ? 'Your Composio API key is active. Enter a new key below if you wish to update or replace it.'
-                  : 'Enter your API key from app.composio.dev to connect third-party OAuth apps.'}
-              </p>
-              <input
-                type="password"
-                style={{
-                  width: '100%',
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.15)',
-                  borderRadius: 8,
-                  padding: '8px 12px',
-                  color: '#fff',
-                  fontSize: 13,
-                  marginBottom: 16,
-                }}
-                placeholder="ak_..."
-                value={composioKey}
-                onChange={e => setComposioKeyInput(e.target.value)}
-              />
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button
-                  style={{ background: 'transparent', border: 'none', color: '#9590b8', cursor: 'pointer', padding: '6px 12px' }}
-                  onClick={() => setShowKeyModal(false)}
-                >
-                  Close
-                </button>
-                <button
-                  style={{ background: '#7c6bff', border: 'none', color: '#fff', borderRadius: 6, padding: '6px 16px', fontWeight: 600, cursor: 'pointer' }}
-                  onClick={handleSaveComposioKey}
-                >
-                  {hasKey ? 'Update Key' : 'Save Key'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Disconnect Modal */}
         {disconnecting && (

@@ -282,14 +282,14 @@ def set_composio_api_key(profile_id: str, api_key: str) -> None:
     logger.info("Composio API key set for profile %s", profile_id)
 
 
-MASTER_COMPOSIO_API_KEY = ""  # No built-in key — users must supply their own.
+MASTER_COMPOSIO_API_KEY = ""
 
 
 def get_composio_api_key(profile_id: str) -> Optional[str]:
     """Return the Composio API key for a profile.
 
     Checks process environment and the profile's .env file.
-    Returns None if no key is configured — callers must handle this.
+    Returns None if no key is configured.
     """
     # 1. Check process environment
     env_override = os.environ.get("COMPOSIO_API_KEY", "").strip()
@@ -306,7 +306,7 @@ def get_composio_api_key(profile_id: str) -> Optional[str]:
                 if val:
                     return val
 
-    # 3. No built-in fallback — return None so callers can prompt the user
+    # 3. No fallback — return None
     return None
 
 

@@ -276,10 +276,10 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
     listAvailableIntegrations: () => ipcRenderer.invoke('orghumans:integrations:listAvailable'),
     listConnectedIntegrations: profileId => ipcRenderer.invoke('orghumans:integrations:listConnected', profileId),
     initiateOAuth: args => ipcRenderer.invoke('orghumans:integrations:initiateOAuth', args),
+    getIntegrationStatus: profileId => ipcRenderer.invoke('orghumans:integrations:getStatus', profileId),
     disconnectIntegration: args => ipcRenderer.invoke('orghumans:integrations:disconnect', args),
-    hasComposioKey: profileId => ipcRenderer.invoke('orghumans:integrations:hasComposioKey', profileId),
-    setComposioKey: args => ipcRenderer.invoke('orghumans:integrations:setComposioKey', args),
     markConnected: args => ipcRenderer.invoke('orghumans:integrations:markConnected', args),
+    getEntityId: profileId => ipcRenderer.invoke('orghumans:integrations:getEntityId', profileId),
     listOrgIntegrations: orgId => ipcRenderer.invoke('orghumans:org:integrations:list', orgId),
     setOrgMemberPermission: args => ipcRenderer.invoke('orghumans:org:integrations:setPermission', args),
     syncStatus: orgId => ipcRenderer.invoke('orghumans:sync:status', orgId)

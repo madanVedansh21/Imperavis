@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { homedir } from 'os'
 import { promisify } from 'util'
+import { randomUUID } from 'crypto'
 
 const execFileAsync = promisify(execFile)
 
@@ -24,6 +25,11 @@ function getRepoRoot(): string {
 }
 
 const PYTHON_CMD = process.platform === 'win32' ? 'python' : 'python3'
+
+// ── Backend URL ─────────────────────────────────────────────────────────────
+// Replace with your deployed Railway / Render / Fly.io backend URL.
+// This backend owns the Composio API key — clients never see or input it.
+const BACKEND_URL = 'https://<YOUR_RAILWAY_BACKEND_URL>'
 
 async function runOrghumans(snippet: string): Promise<unknown> {
   const repoRoot = getRepoRoot()
@@ -123,7 +129,7 @@ print(json.dumps({'ok': True, 'orgs': list_joined_orgs()}))
     { id: "googlecalendar", name: "Google Calendar", description: "Read and create calendar events.", category: "Calendar", icon: "📅", color: "#4285F4" },
     { id: "googledrive", name: "Google Drive", description: "Access and manage files in Drive.", category: "Storage", icon: "📁", color: "#34A853" },
     { id: "googlesheets", name: "Google Sheets", description: "Read and write spreadsheet data.", category: "Productivity", icon: "📊", color: "#0F9D58" },
-    { id: "googledocs", name: "Google Docs", description: "Create and edit documents.", category: "Productivity", icon: "📝", category_name: "Productivity", color: "#4285F4" },
+    { id: "googledocs", name: "Google Docs", description: "Create and edit documents.", category: "Productivity", icon: "📝", color: "#4285F4" },
     { id: "slack", name: "Slack", description: "Send messages and read channels.", category: "Communication", icon: "💬", color: "#4A154B" },
     { id: "discord", name: "Discord", description: "Send messages to Discord channels.", category: "Communication", icon: "🎮", color: "#5865F2" },
     { id: "zoom", name: "Zoom", description: "Schedule and manage Zoom meetings.", category: "Communication", icon: "📹", color: "#2D8CFF" },
@@ -135,7 +141,7 @@ print(json.dumps({'ok': True, 'orgs': list_joined_orgs()}))
     { id: "notion", name: "Notion", description: "Read and write Notion pages.", category: "Productivity", icon: "📓", color: "#000000" },
     { id: "trello", name: "Trello", description: "Manage Trello boards and cards.", category: "Productivity", icon: "📋", color: "#0052CC" },
     { id: "asana", name: "Asana", description: "Create and track Asana tasks.", category: "Productivity", icon: "✅", color: "#F06A6A" },
-    { id: "airtable", "name": "Airtable", description: "Read and write Airtable bases.", category: "Productivity", icon: "🗃️", color: "#18BFFF" },
+    { id: "airtable", name: "Airtable", description: "Read and write Airtable bases.", category: "Productivity", icon: "🗃️", color: "#18BFFF" },
     { id: "hubspot", name: "HubSpot", description: "Manage contacts and deals in HubSpot.", category: "CRM", icon: "🧡", color: "#FF7A59" },
     { id: "salesforce", name: "Salesforce", description: "Access Salesforce records and objects.", category: "CRM", icon: "☁️", color: "#00A1E0" },
     { id: "stripe", name: "Stripe", description: "Query payments, customers, and invoices.", category: "Finance", icon: "💳", color: "#635BFF" },
@@ -143,6 +149,50 @@ print(json.dumps({'ok': True, 'orgs': list_joined_orgs()}))
     { id: "reddit", name: "Reddit", description: "Read subreddits, submit posts and comments.", category: "Social", icon: "🤖", color: "#FF4500" },
     { id: "dropbox", name: "Dropbox", description: "Access and share Dropbox files.", category: "Storage", icon: "📦", color: "#0061FF" },
   ]
+
+  // ── Pure Node.js helpers (no Python subprocess) ─────────────────────────
+
+  function getOrghumansHome(): string {
+    const override = process.env.ORGHUMANS_HOME || process.env.HERMES_HOME
+    if (override) return override
+    if (process.platform === 'win32') {
+      const local = process.env.LOCALAPPDATA
+      return local ? join(local, 'orghumans') : join(homedir(), 'AppData', 'Local', 'orghumans')
+    }
+    return join(homedir(), '.orghumans')
+  }
+
+  function getProfileHome(profileId: string): string {
+    return join(getOrghumansHome(), 'profiles', profileId)
+  }
+
+  /**
+   * Reads or creates a stable entity_id for this client.
+   * Stored in ~/.orghumans/profiles/<profileId>/profile.json
+   * This is the only identifier passed to the backend — the client
+   * never sees or inputs a Composio API key.
+   */
+  function getOrCreateEntityId(profileId: string): string {
+    const profileHome = getProfileHome(profileId)
+    mkdirSync(profileHome, { recursive: true })
+    const profileJsonPath = join(profileHome, 'profile.json')
+
+    let data: Record<string, string> = {}
+    if (existsSync(profileJsonPath)) {
+      try {
+        data = JSON.parse(readFileSync(profileJsonPath, 'utf-8'))
+      } catch { /* corrupt JSON — start fresh */ }
+    }
+
+    if (!data.entity_id) {
+      data.entity_id = randomUUID()
+      writeFileSync(profileJsonPath, JSON.stringify(data, null, 2), 'utf-8')
+    }
+
+    return data.entity_id
+  }
+
+  // ── Integration IPC handlers ───────────────────────────────────────────────
 
   ipcMain.handle('orghumans:integrations:listAvailable', async () =>
     // Return static catalogue immediately — no Python subprocess needed
@@ -161,127 +211,76 @@ print(json.dumps(get_connected_integrations(${JSON.stringify(profileId)})))
     }
   })
 
-  // ── Direct Node.js helpers (no Python subprocess) ─────────────────────────
-
-  function getOrghumansHome(): string {
-    const override = process.env.ORGHUMANS_HOME || process.env.HERMES_HOME
-    if (override) return override
-    if (process.platform === 'win32') {
-      const local = process.env.LOCALAPPDATA
-      return local ? join(local, 'orghumans') : join(homedir(), 'AppData', 'Local', 'orghumans')
-    }
-    return join(homedir(), '.orghumans')
-  }
-
-  function getProfileHome(profileId: string): string {
-    return join(getOrghumansHome(), 'profiles', profileId, 'hermes-home')
-  }
-
-  function readComposioKey(profileId: string): string {
-    // 1. Process env
-    if (process.env.COMPOSIO_API_KEY) return process.env.COMPOSIO_API_KEY
-    // 2. Profile .env file
-    const envPath = join(getProfileHome(profileId), '.env')
-    if (existsSync(envPath)) {
-      const lines = readFileSync(envPath, 'utf-8').split('\n')
-      for (const line of lines) {
-        if (line.startsWith('COMPOSIO_API_KEY=')) {
-          const val = line.slice('COMPOSIO_API_KEY='.length).trim()
-          if (val) return val
-        }
-      }
-    }
-    // 3. No built-in fallback — user must supply their own Composio API key
-    return ''
-  }
-
-  function writeComposioKey(profileId: string, apiKey: string): void {
-    const profileHome = getProfileHome(profileId)
-    mkdirSync(profileHome, { recursive: true })
-    const envPath = join(profileHome, '.env')
-    let lines: string[] = []
-    if (existsSync(envPath)) {
-      lines = readFileSync(envPath, 'utf-8').split('\n')
-    }
-    const keyLine = `COMPOSIO_API_KEY=${apiKey}`
-    const idx = lines.findIndex(l => l.startsWith('COMPOSIO_API_KEY='))
-    if (idx >= 0) {
-      lines[idx] = keyLine
-    } else {
-      lines.push(keyLine)
-    }
-    writeFileSync(envPath, lines.join('\n'), 'utf-8')
-
-    // Auto-configure Composio Connect MCP Server in profile config.yaml
-    try {
-      const configPath = join(profileHome, 'config.yaml')
-      let configContent = existsSync(configPath) ? readFileSync(configPath, 'utf-8') : ''
-      if (!configContent.includes('connect.composio.dev/mcp')) {
-        const mcpSnippet = `\nmcp_servers:\n  composio:\n    url: "https://connect.composio.dev/mcp"\n    headers:\n      x-api-key: "${apiKey}"\n`
-        configContent = configContent ? `${configContent.trim()}\n${mcpSnippet}` : mcpSnippet.trim()
-        writeFileSync(configPath, configContent, 'utf-8')
-      }
-    } catch { /* non-fatal */ }
-  }
-
-  async function fetchComposioOAuthUrl(apiKey: string, provider: string, profileId: string): Promise<string> {
-    if (!apiKey) {
-      return `https://connect.composio.dev/link?app=${provider.toLowerCase()}`
-    }
-
-    const endpoints = [
-      'https://backend.composio.dev/api/v3/connected_accounts/link',
-      'https://backend.composio.dev/api/v3.1/connected_accounts/link',
-    ]
-
-    const payloads = [
-      { appName: provider.toLowerCase(), user_id: profileId },
-      { appName: provider.toUpperCase(), user_id: profileId },
-      { auth_config_id: provider.toLowerCase(), user_id: profileId },
-    ]
-
-    for (const endpoint of endpoints) {
-      for (const body of payloads) {
-        try {
-          const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-              'x-api-key': apiKey,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(body),
-          })
-
-          if (response.ok) {
-            const data = (await response.json()) as any
-            const redirectUrl =
-              data.redirectUrl ||
-              data.redirect_url ||
-              data.url ||
-              data.data?.redirectUrl ||
-              data.data?.redirect_url
-            if (redirectUrl) return redirectUrl
-          }
-        } catch (err) {
-          console.error(`[Composio] Error requesting OAuth link from ${endpoint}:`, err)
-        }
-      }
-    }
-
-    return `https://connect.composio.dev/link?app=${provider.toLowerCase()}`
-  }
-
-  // OAuth: open direct OAuth flow via Composio v3 API / Composio Connect
+  /**
+   * initiateOAuth: POST to our backend, which calls Composio using its
+   * server-side API key, and returns a redirect URL for this entity_id.
+   * The client just opens the URL — they never touch a Composio key.
+   */
   ipcMain.handle(
     'orghumans:integrations:initiateOAuth',
     async (_event, { provider, profileId }: { provider: string; profileId: string }) => {
       try {
-        const composioKey = readComposioKey(profileId)
-        const url = await fetchComposioOAuthUrl(composioKey, provider, profileId)
+        const entityId = getOrCreateEntityId(profileId)
+
+        const response = await fetch(`${BACKEND_URL}/integrations/connect`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ entity_id: entityId, app: provider }),
+        })
+
+        if (!response.ok) {
+          const errText = await response.text()
+          return { ok: false, error: `Backend error ${response.status}: ${errText}` }
+        }
+
+        const data = (await response.json()) as { url?: string }
+        const url = data.url
+        if (!url) return { ok: false, error: 'Backend did not return a redirect URL' }
+
         await shell.openExternal(url)
-        return { ok: true, url, composioKey: !!composioKey }
+        return { ok: true, url }
       } catch (err) {
         return { ok: false, error: String(err) }
+      }
+    }
+  )
+
+  /**
+   * getIntegrationStatus: GET backend status for this entity_id.
+   * Returns which apps are actually connected in Composio, then syncs
+   * the local SQLite DB so the UI status dots are accurate.
+   */
+  ipcMain.handle(
+    'orghumans:integrations:getStatus',
+    async (_event, profileId: string) => {
+      try {
+        const entityId = getOrCreateEntityId(profileId)
+
+        const response = await fetch(
+          `${BACKEND_URL}/integrations/status?entity_id=${encodeURIComponent(entityId)}`
+        )
+
+        if (!response.ok) {
+          return { ok: false, connected: [] }
+        }
+
+        const data = (await response.json()) as { connected?: string[] }
+        const connectedApps: string[] = data.connected ?? []
+
+        // Sync results into local SQLite so the UI tile dots are accurate
+        for (const app of connectedApps) {
+          try {
+            await runOrghumans(`
+from orghumans.db.integrations_db import upsert_connection
+upsert_connection(${JSON.stringify(profileId)}, ${JSON.stringify(app)}, status='active')
+print(json.dumps({'ok': True}))
+`)
+          } catch { /* non-fatal */ }
+        }
+
+        return { ok: true, connected: connectedApps }
+      } catch (err) {
+        return { ok: false, connected: [], error: String(err) }
       }
     }
   )
@@ -290,9 +289,7 @@ print(json.dumps(get_connected_integrations(${JSON.stringify(profileId)})))
     'orghumans:integrations:disconnect',
     async (_event, { provider, profileId }: { provider: string; profileId: string }) => {
       try {
-        // Use only integrations_db.delete_connection — pure SQLite, zero Composio SDK
-        // imports, so this is always fast (< 1s). The old disconnect_integration call
-        // was importing composio-core which hung for 20 s before SIGTERM.
+        // Delete from local SQLite — pure, fast, no Python Composio SDK
         await runOrghumans(`
 from orghumans.db.integrations_db import delete_connection
 delete_connection(${JSON.stringify(profileId)}, ${JSON.stringify(provider)})
@@ -322,36 +319,15 @@ print(json.dumps({'ok': True}))
     }
   )
 
-  // hasComposioKey: pure Node.js — reads .env directly, zero Python overhead
-  ipcMain.handle('orghumans:integrations:hasComposioKey', async (_event, profileId: string) => {
+  // getEntityId: expose entity_id to the renderer (read-only)
+  ipcMain.handle('orghumans:integrations:getEntityId', async (_event, profileId: string) => {
     try {
-      const key = readComposioKey(profileId)
-      return { ok: true, hasKey: Boolean(key) }
+      const entityId = getOrCreateEntityId(profileId)
+      return { ok: true, entityId }
     } catch (err) {
-      return { ok: true, hasKey: false }
+      return { ok: false, error: String(err) }
     }
   })
-
-  // setComposioKey: pure Node.js — writes .env directly, zero Python overhead
-  ipcMain.handle(
-    'orghumans:integrations:setComposioKey',
-    async (_event, { profileId, apiKey }: { profileId: string; apiKey: string }) => {
-      try {
-        writeComposioKey(profileId, apiKey)
-        // Also try via Python for any extra side effects (best-effort)
-        try {
-          await runOrghumans(`
-from orghumans.composio_client import set_composio_api_key
-set_composio_api_key(${JSON.stringify(profileId)}, ${JSON.stringify(apiKey)})
-print(json.dumps({'ok': True}))
-`)
-        } catch { /* non-fatal */ }
-        return { ok: true }
-      } catch (err) {
-        return { ok: false, error: String(err) }
-      }
-    }
-  )
 
   // ── Org RBAC Management ───────────────────────────────────────────────────
 
