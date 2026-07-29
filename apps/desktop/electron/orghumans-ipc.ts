@@ -152,8 +152,13 @@ print(json.dumps({'ok': True, 'orgs': list_joined_orgs()}))
 
   // ── Pure Node.js helpers (no Python subprocess) ─────────────────────────
 
-  function getOrghumansHome(): string {
-    const override = process.env.ORGHUMANS_HOME || process.env.HERMES_HOME
+  /**
+   * Returns the OrgHumans data root (where active_profile.json lives).
+   * Priority: ORGHUMANS_HOME env > platform default
+   * NOTE: This is NOT HERMES_HOME — it is the orghumans root that CONTAINS profiles.
+   */
+  function getOrghumansRoot(): string {
+    const override = process.env.ORGHUMANS_HOME
     if (override) return override
     if (process.platform === 'win32') {
       const local = process.env.LOCALAPPDATA
@@ -162,13 +167,57 @@ print(json.dumps({'ok': True, 'orgs': list_joined_orgs()}))
     return join(homedir(), '.orghumans')
   }
 
-  function getProfileHome(profileId: string): string {
-    return join(getOrghumansHome(), 'profiles', profileId)
+  /**
+   * Mirrors hermes_constants.py `get_hermes_home()` exactly.
+   *
+   * Resolution order (matches Python):
+   *   1. HERMES_HOME env var — if set, use it directly (handles non-standard
+   *      installs like D:\OrgHumansData where C: was full)
+   *   2. OrgHumans active profile — reads active_profile.json and resolves
+   *      the per-profile HERMES_HOME (normal client path)
+   *   3. Platform default — Windows: LOCALAPPDATA/hermes · Mac/Linux: ~/.hermes
+   *
+   * This function is the single source of truth for where config.yaml lives.
+   * Never hardcode any absolute path.
+   */
+  function getHermesHome(): string {
+    // 1. Explicit HERMES_HOME override (e.g. dev machine with D: redirect)
+    const explicit = process.env.HERMES_HOME?.trim()
+    if (explicit) return explicit
+
+    // 2. OrgHumans active profile hook
+    try {
+      const orgRoot = getOrghumansRoot()
+      const activeJson = join(orgRoot, 'active_profile.json')
+      if (existsSync(activeJson)) {
+        const data = JSON.parse(readFileSync(activeJson, 'utf-8')) as { active?: string }
+        const profileId = data.active?.trim()
+        if (profileId) {
+          const profileHome = join(orgRoot, 'profiles', profileId)
+          if (existsSync(profileHome)) return profileHome
+        }
+      }
+    } catch { /* silently fall through to platform default */ }
+
+    // 3. Platform-native default (same as hermes_constants._get_platform_default_hermes_home)
+    if (process.platform === 'win32') {
+      const local = process.env.LOCALAPPDATA
+      return local ? join(local, 'hermes') : join(homedir(), 'AppData', 'Local', 'hermes')
+    }
+    return join(homedir(), '.hermes')
   }
+
+  /** Returns the orghumans profile directory (for profile.json / entity_id storage). */
+  function getProfileHome(profileId: string): string {
+    return join(getOrghumansRoot(), 'profiles', profileId)
+  }
+
+  // Keep getOrghumansHome as a backwards-compat alias used by existing callers.
+  function getOrghumansHome(): string { return getOrghumansRoot() }
 
   /**
    * Reads or creates a stable entity_id for this client.
-   * Stored in ~/.orghumans/profiles/<profileId>/profile.json
+   * Stored in <orghumansRoot>/profiles/<profileId>/profile.json
    * This is the only identifier passed to the backend — the client
    * never sees or inputs a Composio API key.
    */
@@ -337,6 +386,72 @@ print(json.dumps({'ok': True}))
     try {
       const entityId = getOrCreateEntityId(profileId)
       return { ok: true, entityId }
+    } catch (err) {
+      return { ok: false, error: String(err) }
+    }
+  })
+
+  /**
+   * writeMcpConfig: Fetches a per-user Composio MCP URL from the backend and
+   * writes it into the correct config.yaml (resolved via getHermesHome()).
+   *
+   * The resolution is dynamic — it will work correctly regardless of whether
+   * the client has HERMES_HOME set (like a D: redirect), uses OrgHumans profiles,
+   * or is on a plain Hermes install. No path is hardcoded.
+   */
+  ipcMain.handle('orghumans:integrations:writeMcpConfig', async (_event, profileId: string) => {
+    try {
+      const entityId = getOrCreateEntityId(profileId)
+      const hermesHome = getHermesHome()
+
+      // 1. Fetch per-user MCP URL from our Vercel backend proxy
+      const response = await fetch(`${BACKEND_URL}/integrations/mcp-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entity_id: entityId }),
+      })
+      if (!response.ok) {
+        const err = await response.text()
+        return { ok: false, error: `Backend error: ${err}` }
+      }
+      const { url } = (await response.json()) as { url: string }
+      if (!url) return { ok: false, error: 'Backend returned no MCP URL' }
+
+      // 2. Read existing config.yaml (if any) and patch mcp_servers block
+      const configPath = join(hermesHome, 'config.yaml')
+      mkdirSync(hermesHome, { recursive: true })
+
+      // Use a minimal yaml write — we only touch the composio-integrations key
+      // and preserve everything else by doing a line-level upsert.
+      let yaml = existsSync(configPath) ? readFileSync(configPath, 'utf-8') : ''
+
+      const serverKey = 'composio-integrations'
+      const newBlock = [
+        `mcp_servers:`,
+        `  ${serverKey}:`,
+        `    url: "${url}"`,
+        `    transport: streamable_http`,
+      ].join('\n')
+
+      if (!yaml.includes('mcp_servers:')) {
+        // No mcp_servers block yet — append
+        yaml = yaml.trimEnd() + '\n\n' + newBlock + '\n'
+      } else if (!yaml.includes(serverKey + ':')) {
+        // mcp_servers exists but our key is missing — inject under it
+        yaml = yaml.replace(
+          /^mcp_servers:/m,
+          `mcp_servers:\n  ${serverKey}:\n    url: "${url}"\n    transport: streamable_http`
+        )
+      } else {
+        // Key exists — update just the url line
+        yaml = yaml.replace(
+          new RegExp(`(  ${serverKey}:[\\s\\S]*?url: )[^\\n]+`, 'm'),
+          `$1"${url}"`
+        )
+      }
+
+      writeFileSync(configPath, yaml, 'utf-8')
+      return { ok: true, hermesHome, configPath, url }
     } catch (err) {
       return { ok: false, error: String(err) }
     }

@@ -40,6 +40,7 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
   const [disconnecting, setDisconnecting] = useState<string | null>(null)
   const [oauthPendingProvider, setOauthPendingProvider] = useState<string | null>(null)
   const [oauthError, setOauthError] = useState<string | null>(null)
+  const [restartNeeded, setRestartNeeded] = useState(false)
 
   const loadIntegrations = async () => {
     if (!window.hermesDesktop?.orghumans) return
@@ -91,12 +92,18 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
           const isNowConnected = connRes.connected.some(c => c.provider.toLowerCase() === oauthPendingProvider.toLowerCase() && c.status === 'active')
           if (isNowConnected) {
             setOauthPendingProvider(null)
+            // Silently update config.yaml with the per-user Composio MCP URL
+            // so Hermes picks up the tools on next launch. Fire-and-forget.
+            window.hermesDesktop?.orghumans?.writeMcpConfig(activeProfile)
+              .then(res => { if (res?.ok) setRestartNeeded(true) })
+              .catch(e => console.warn('[Integrations] writeMcpConfig:', e))
           }
         }
       } catch (err) {}
     }, 2500)
     return () => clearInterval(interval)
   }, [oauthPendingProvider, activeProfile])
+
 
   const isConnected = (providerId: string) =>
     connected.some(c => c.provider.toLowerCase() === providerId.toLowerCase() && c.status === 'active')
@@ -236,7 +243,42 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
           </div>
         )}
 
+        {/* Restart Needed Banner */}
+        {restartNeeded && (
+          <div
+            style={{
+              background: 'rgba(16, 185, 129, 0.1)',
+              border: '1px solid rgba(16, 185, 129, 0.4)',
+              borderRadius: 10,
+              padding: '12px 16px',
+              marginBottom: 16,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 18 }}>✅</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#34d399' }}>
+                  Integration connected — restart to activate
+                </div>
+                <div style={{ fontSize: 11, color: '#6ee7b7', marginTop: 2 }}>
+                  Close and reopen the app once. After that, just talk to the AI normally — no setup needed.
+                </div>
+              </div>
+            </div>
+            <button
+              style={{ background: 'transparent', border: 'none', color: '#6ee7b7', cursor: 'pointer', fontSize: 16 }}
+              onClick={() => setRestartNeeded(false)}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* OAuth Pending Confirmation Banner */}
+
         {oauthPendingProvider && (
           <div
             style={{
