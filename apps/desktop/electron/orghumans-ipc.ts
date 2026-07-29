@@ -29,7 +29,7 @@ const PYTHON_CMD = process.platform === 'win32' ? 'python' : 'python3'
 // ── Backend URL ─────────────────────────────────────────────────────────────
 // Replace with your deployed Railway / Render / Fly.io backend URL.
 // This backend owns the Composio API key — clients never see or input it.
-const BACKEND_URL = 'https://<YOUR_RAILWAY_BACKEND_URL>'
+const BACKEND_URL = 'https://orghumanserver.vercel.app/api'
 
 async function runOrghumans(snippet: string): Promise<unknown> {
   const repoRoot = getRepoRoot()

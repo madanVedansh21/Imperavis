@@ -4461,14 +4461,11 @@ def _load_mcp_config() -> Dict[str, dict]:
                         entity_id = _prof.get("entity_id")
                     except Exception:
                         pass
-                # Replace the placeholder below with your Composio project API key.
-                # This key is owned by your backend — the end-user never sees it.
-                _COMPOSIO_BACKEND_API_KEY = "<YOUR_COMPOSIO_PROJECT_API_KEY>"
-                if entity_id and _COMPOSIO_BACKEND_API_KEY != "<YOUR_COMPOSIO_PROJECT_API_KEY>":
+                # Point the MCP connection to our secure Next.js proxy server
+                if entity_id:
                     servers["composio"] = {
-                        "url": "https://connect.composio.dev/mcp",
+                        "url": "https://orghumanserver.vercel.app/api/mcp",
                         "headers": {
-                            "x-api-key": _COMPOSIO_BACKEND_API_KEY,
                             "x-entity-id": entity_id,
                         }
                     }
