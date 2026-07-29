@@ -48,8 +48,8 @@ _CATALOGUE: list[dict] = [
     {"id": "slack", "name": "Slack", "description": "Send messages and read channels.", "category": "Communication", "icon": "💬", "color": "#4A154B"},
     {"id": "zoom", "name": "Zoom", "description": "Schedule and manage Zoom meetings.", "category": "Communication", "icon": "📹", "color": "#2D8CFF"},
     {"id": "microsoftteams", "name": "Microsoft Teams", "description": "Send messages and join meetings.", "category": "Communication", "icon": "👥", "color": "#6264A7"},
-    {"id": "outlook", "name": "Outlook", "description": "Read and send Outlook emails.", "category": "Email", "icon": "📨", "color": "#0078D4"}
-    {"id": "googlemeet", "name": "Google Meet", "description": "Join and host Google Meet meetings.", "category": "Communication", "icon": "📹", "color": "#2D8CFF"},,
+    {"id": "outlook", "name": "Outlook", "description": "Read and send Outlook emails.", "category": "Email", "icon": "📨", "color": "#0078D4"},
+    {"id": "googlemeet", "name": "Google Meet", "description": "Join and host Google Meet meetings.", "category": "Communication", "icon": "📹", "color": "#2D8CFF"},
     # Dev tools
     {"id": "github", "name": "GitHub", "description": "Manage repos, issues, and PRs.", "category": "Development", "icon": "🐙", "color": "#24292F"},    # Project management
     {"id": "notion", "name": "Notion", "description": "Read and write Notion pages.", "category": "Productivity", "icon": "📓", "color": "#000000"},
