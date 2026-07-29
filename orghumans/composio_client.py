@@ -44,31 +44,22 @@ _CATALOGUE: list[dict] = [
     {"id": "googledrive", "name": "Google Drive", "description": "Access and manage files in Drive.", "category": "Storage", "icon": "📁", "color": "#34A853"},
     {"id": "googlesheets", "name": "Google Sheets", "description": "Read and write spreadsheet data.", "category": "Productivity", "icon": "📊", "color": "#0F9D58"},
     {"id": "googledocs", "name": "Google Docs", "description": "Create and edit documents.", "category": "Productivity", "icon": "📝", "color": "#4285F4"},
-    # Communication
+     # Communication
     {"id": "slack", "name": "Slack", "description": "Send messages and read channels.", "category": "Communication", "icon": "💬", "color": "#4A154B"},
-    {"id": "discord", "name": "Discord", "description": "Send messages to Discord channels.", "category": "Communication", "icon": "🎮", "color": "#5865F2"},
     {"id": "zoom", "name": "Zoom", "description": "Schedule and manage Zoom meetings.", "category": "Communication", "icon": "📹", "color": "#2D8CFF"},
     {"id": "microsoftteams", "name": "Microsoft Teams", "description": "Send messages and join meetings.", "category": "Communication", "icon": "👥", "color": "#6264A7"},
-    {"id": "outlook", "name": "Outlook", "description": "Read and send Outlook emails.", "category": "Email", "icon": "📨", "color": "#0078D4"},
+    {"id": "outlook", "name": "Outlook", "description": "Read and send Outlook emails.", "category": "Email", "icon": "📨", "color": "#0078D4"}
+    {"id": "googlemeet", "name": "Google Meet", "description": "Join and host Google Meet meetings.", "category": "Communication", "icon": "📹", "color": "#2D8CFF"},,
     # Dev tools
-    {"id": "github", "name": "GitHub", "description": "Manage repos, issues, and PRs.", "category": "Development", "icon": "🐙", "color": "#24292F"},
-    {"id": "linear", "name": "Linear", "description": "Create and update Linear issues.", "category": "Development", "icon": "📐", "color": "#5E6AD2"},
-    {"id": "jira", "name": "Jira", "description": "Track issues and sprints in Jira.", "category": "Development", "icon": "🎯", "color": "#0052CC"},
-    # Project management
+    {"id": "github", "name": "GitHub", "description": "Manage repos, issues, and PRs.", "category": "Development", "icon": "🐙", "color": "#24292F"},    # Project management
     {"id": "notion", "name": "Notion", "description": "Read and write Notion pages.", "category": "Productivity", "icon": "📓", "color": "#000000"},
     {"id": "trello", "name": "Trello", "description": "Manage Trello boards and cards.", "category": "Productivity", "icon": "📋", "color": "#0052CC"},
-    {"id": "asana", "name": "Asana", "description": "Create and track Asana tasks.", "category": "Productivity", "icon": "✅", "color": "#F06A6A"},
-    {"id": "airtable", "name": "Airtable", "description": "Read and write Airtable bases.", "category": "Productivity", "icon": "🗃️", "color": "#18BFFF"},
     # CRM / Sales
     {"id": "hubspot", "name": "HubSpot", "description": "Manage contacts and deals in HubSpot.", "category": "CRM", "icon": "🧡", "color": "#FF7A59"},
     {"id": "salesforce", "name": "Salesforce", "description": "Access Salesforce records and objects.", "category": "CRM", "icon": "☁️", "color": "#00A1E0"},
-    # Finance
-    {"id": "stripe", "name": "Stripe", "description": "Query payments, customers, and invoices.", "category": "Finance", "icon": "💳", "color": "#635BFF"},
     # Social
-    {"id": "twitter", "name": "X / Twitter", "description": "Post tweets and read timelines.", "category": "Social", "icon": "🐦", "color": "#1DA1F2"},
     {"id": "reddit", "name": "Reddit", "description": "Read subreddits, submit posts and comments.", "category": "Social", "icon": "🤖", "color": "#FF4500"},
-    # Storage
-    {"id": "dropbox", "name": "Dropbox", "description": "Access and share Dropbox files.", "category": "Storage", "icon": "📦", "color": "#0061FF"},
+    {"id": "linkedin", "name": "LinkedIn", "description": "Manage LinkedIn connections and posts.", "category": "Social", "icon": "👔", "color": "#0077B5"},
 ]
 
 

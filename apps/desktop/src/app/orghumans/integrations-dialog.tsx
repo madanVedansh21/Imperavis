@@ -39,6 +39,7 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
   const [loading, setLoading] = useState(false)
   const [disconnecting, setDisconnecting] = useState<string | null>(null)
   const [oauthPendingProvider, setOauthPendingProvider] = useState<string | null>(null)
+  const [oauthError, setOauthError] = useState<string | null>(null)
 
   const loadIntegrations = async () => {
     if (!window.hermesDesktop?.orghumans) return
@@ -79,19 +80,40 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
     }
   }, [open, activeProfile])
 
+  useEffect(() => {
+    if (!oauthPendingProvider) return
+    const interval = setInterval(async () => {
+      try {
+        await window.hermesDesktop?.orghumans?.getIntegrationStatus(activeProfile)
+        const connRes = await window.hermesDesktop?.orghumans?.listConnectedIntegrations(activeProfile)
+        if (connRes?.connected) {
+          setConnected(connRes.connected)
+          const isNowConnected = connRes.connected.some(c => c.provider.toLowerCase() === oauthPendingProvider.toLowerCase() && c.status === 'active')
+          if (isNowConnected) {
+            setOauthPendingProvider(null)
+          }
+        }
+      } catch (err) {}
+    }, 2500)
+    return () => clearInterval(interval)
+  }, [oauthPendingProvider, activeProfile])
+
   const isConnected = (providerId: string) =>
     connected.some(c => c.provider.toLowerCase() === providerId.toLowerCase() && c.status === 'active')
 
   const handleConnect = async (provider: string) => {
     try {
       setOauthPendingProvider(provider)
+      setOauthError(null)
       const res = await window.hermesDesktop?.orghumans?.initiateOAuth({ provider, profileId: activeProfile })
       if (!res?.ok) {
         console.error('[Integrations] OAuth error:', res?.error)
+        setOauthError(res?.error || 'Unknown error occurred')
         setOauthPendingProvider(null)
       }
     } catch (err) {
       console.error('[Integrations] OAuth error:', err)
+      setOauthError(String(err))
       setOauthPendingProvider(null)
     }
   }
@@ -188,12 +210,12 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
           </div>
         </div>
 
-        {/* OAuth Pending Confirmation Banner */}
-        {oauthPendingProvider && (
+        {/* Error Banner */}
+        {oauthError && (
           <div
             style={{
-              background: 'rgba(16, 185, 129, 0.12)',
-              border: '1px solid rgba(16, 185, 129, 0.4)',
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '1px solid rgba(239, 68, 68, 0.4)',
               borderRadius: 10,
               padding: '12px 16px',
               marginBottom: 16,
@@ -202,40 +224,55 @@ export function IntegrationsDialog({ open, onClose }: { open: boolean; onClose: 
               justifyContent: 'space-between',
             }}
           >
-            <span style={{ fontSize: 13, color: '#a7f3d0' }}>
-              🌐 Opened <strong>{oauthPendingProvider}</strong> authorization page in your browser. Completed?
+            <span style={{ fontSize: 13, color: '#fca5a5' }}>
+              <strong>Error:</strong> {oauthError}
             </span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                style={{
-                  background: 'rgba(255,255,255,0.06)',
-                  color: '#9590b8',
-                  border: 'none',
-                  borderRadius: 6,
-                  padding: '6px 10px',
-                  fontSize: 12,
-                  cursor: 'pointer',
-                }}
-                onClick={() => setOauthPendingProvider(null)}
-              >
-                Cancel
-              </button>
-              <button
-                style={{
-                  background: '#10b981',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 6,
-                  padding: '6px 14px',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-                onClick={handleConfirmConnected}
-              >
-                ✓ Confirm Connected
-              </button>
+            <button
+              style={{ background: 'transparent', border: 'none', color: '#fca5a5', cursor: 'pointer', fontSize: 16 }}
+              onClick={() => setOauthError(null)}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* OAuth Pending Confirmation Banner */}
+        {oauthPendingProvider && (
+          <div
+            style={{
+              background: 'rgba(124, 107, 255, 0.12)',
+              border: '1px solid rgba(124, 107, 255, 0.4)',
+              borderRadius: 10,
+              padding: '12px 16px',
+              marginBottom: 16,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <style>{`
+              @keyframes spin { 100% { transform: rotate(360deg); } }
+            `}</style>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 16, height: 16, border: '2px solid rgba(167, 139, 250, 0.3)', borderTopColor: '#a78bfa', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+              <span style={{ fontSize: 13, color: '#e8e6ff' }}>
+                Waiting for authentication in browser for <strong>{oauthPendingProvider}</strong>...
+              </span>
             </div>
+            <button
+              style={{
+                background: 'rgba(255,255,255,0.06)',
+                color: '#9590b8',
+                border: 'none',
+                borderRadius: 6,
+                padding: '6px 10px',
+                fontSize: 12,
+                cursor: 'pointer',
+              }}
+              onClick={() => setOauthPendingProvider(null)}
+            >
+              Cancel
+            </button>
           </div>
         )}
 
