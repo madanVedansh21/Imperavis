@@ -289,7 +289,20 @@ print(json.dumps({'ok': True}))
     'orghumans:integrations:disconnect',
     async (_event, { provider, profileId }: { provider: string; profileId: string }) => {
       try {
-        // Delete from local SQLite — pure, fast, no Python Composio SDK
+        const entityId = getOrCreateEntityId(profileId)
+
+        // 1. Tell the backend to actually disconnect it from Composio
+        const response = await fetch(`${BACKEND_URL}/integrations/disconnect`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ entity_id: entityId, app: provider }),
+        })
+
+        if (!response.ok) {
+          console.warn(`[Integrations] Backend disconnect failed for ${provider}: ${response.status}`)
+        }
+
+        // 2. Delete from local SQLite
         await runOrghumans(`
 from orghumans.db.integrations_db import delete_connection
 delete_connection(${JSON.stringify(profileId)}, ${JSON.stringify(provider)})
