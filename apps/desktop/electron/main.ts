@@ -522,6 +522,8 @@ function resolveHermesHome() {
 }
 
 const HERMES_HOME = resolveHermesHome()
+process.env.HERMES_HOME = HERMES_HOME
+process.env.ORGHUMANS_HOME = HERMES_HOME
 
 function hermesManagedNodePathEntries() {
   // NOTE: keep this ordering in sync with iter_hermes_node_dirs() in
