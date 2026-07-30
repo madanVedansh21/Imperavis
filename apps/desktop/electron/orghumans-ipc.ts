@@ -423,29 +423,36 @@ print(json.dumps({'ok': True}))
 
       // Use a minimal yaml write — we only touch the composio-integrations key
       // and preserve everything else by doing a line-level upsert.
+      // IMPORTANT: Only match an *uncommented* mcp_servers key (starts at column 0,
+      // no leading '#' or whitespace) to avoid being confused by the commented-out
+      // template block that ships inside the default config.yaml.
       let yaml = existsSync(configPath) ? readFileSync(configPath, 'utf-8') : ''
 
       const serverKey = 'composio-integrations'
-      const newBlock = [
-        `mcp_servers:`,
+      // Matches an uncommented top-level mcp_servers: key
+      const hasMcpBlock = /^mcp_servers:/m.test(yaml)
+      // Matches an uncommented composio-integrations: key (indented under mcp_servers)
+      const hasOurKey = new RegExp(`^  ${serverKey}:`, 'm').test(yaml)
+
+      const serverEntry = [
         `  ${serverKey}:`,
         `    url: "${url}"`,
         `    transport: streamable_http`,
       ].join('\n')
 
-      if (!yaml.includes('mcp_servers:')) {
-        // No mcp_servers block yet — append
-        yaml = yaml.trimEnd() + '\n\n' + newBlock + '\n'
-      } else if (!yaml.includes(serverKey + ':')) {
-        // mcp_servers exists but our key is missing — inject under it
+      if (!hasMcpBlock) {
+        // No active mcp_servers block — append a clean one at the end
+        yaml = yaml.trimEnd() + '\n\nmcp_servers:\n' + serverEntry + '\n'
+      } else if (!hasOurKey) {
+        // Active mcp_servers block exists but our key is missing — inject under it
         yaml = yaml.replace(
           /^mcp_servers:/m,
-          `mcp_servers:\n  ${serverKey}:\n    url: "${url}"\n    transport: streamable_http`
+          `mcp_servers:\n${serverEntry}`
         )
       } else {
-        // Key exists — update just the url line
+        // Key already exists — update just the url line in-place
         yaml = yaml.replace(
-          new RegExp(`(  ${serverKey}:[\\s\\S]*?url: )[^\\n]+`, 'm'),
+          new RegExp(`(^  ${serverKey}:[\\s\\S]*?^    url: )[^\\n]+`, 'm'),
           `$1"${url}"`
         )
       }

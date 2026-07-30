@@ -580,6 +580,51 @@ const DEFAULT_UPDATE_BRANCH = 'main'
 // errors.log, gateway.log produced by hermes_logging.setup_logging — one log
 // directory per user, regardless of which UI surface produced the line.
 const DESKTOP_LOG_PATH = path.join(HERMES_HOME, 'logs', 'desktop.log')
+// PID file for crash-resilient orphan cleanup: written on every backend spawn,
+// read+killed on the next app.whenReady() — survives hard kills (Task Manager,
+// power loss, GPU crash) where before-quit never fires. Without this a force-
+// closed app leaves python.exe running, and the next launch races it, triggering
+// the "Another gateway instance ... Exiting" boot loop seen by non-tech users.
+const BACKEND_PID_FILE = path.join(HERMES_HOME, 'logs', 'desktop-backend.pid')
+
+/**
+ * On startup: read the PID file from the previous session and kill that
+ * process tree before spawning a new backend. This is idempotent and
+ * best-effort — if the process is already gone we silently continue.
+ */
+function killOrphanBackendFromPidFile(): void {
+  try {
+    if (!fs.existsSync(BACKEND_PID_FILE)) return
+    const raw = fs.readFileSync(BACKEND_PID_FILE, 'utf8').trim()
+    const pid = parseInt(raw, 10)
+    if (!Number.isFinite(pid) || pid <= 0) return
+    rememberLog(`[orphan-cleanup] Found stale backend PID ${pid} from previous session — killing.`)
+    if (IS_WINDOWS) {
+      forceKillProcessTree(pid)
+    } else {
+      try { process.kill(pid, 'SIGTERM') } catch { /* already gone */ }
+    }
+  } catch {
+    // Best-effort — never block startup.
+  } finally {
+    try { fs.rmSync(BACKEND_PID_FILE, { force: true }) } catch { /* ignore */ }
+  }
+}
+
+/** Write the backend PID to disk so killOrphanBackendFromPidFile() can clean up on next launch. */
+function writeBackendPidFile(pid: number | undefined): void {
+  if (!pid || !Number.isFinite(pid)) return
+  try {
+    fs.mkdirSync(path.dirname(BACKEND_PID_FILE), { recursive: true })
+    fs.writeFileSync(BACKEND_PID_FILE, String(pid), 'utf8')
+  } catch { /* non-fatal */ }
+}
+
+/** Remove the PID file on clean shutdown so the next launch skips the orphan kill. */
+function deleteBackendPidFile(): void {
+  try { fs.rmSync(BACKEND_PID_FILE, { force: true }) } catch { /* ignore */ }
+}
+
 const DESKTOP_LOG_FLUSH_MS = 120
 const DESKTOP_LOG_BUFFER_MAX_CHARS = 64 * 1024
 // Bound desktop.log on disk. It is an append-only forensic log, so a boot loop
@@ -8078,6 +8123,11 @@ async function startHermes() {
       })
     )
 
+    // Write PID file immediately so the next launch can kill this process even
+    // if the current session is hard-killed (Task Manager / GPU crash / power loss)
+    // and before-quit never fires. This is the crash-resilient orphan cleanup.
+    writeBackendPidFile(hermesProcess.pid)
+
     const processOwner = backendConnectionState.attachProcess(connectionAttempt, hermesProcess)
 
     if (!processOwner) {
@@ -10843,6 +10893,11 @@ app.on('open-url', (event, url) => {
 })
 
 app.whenReady().then(() => {
+  // Kill any orphaned backend from a previous session BEFORE spawning a new one.
+  // This is the primary defense against the boot loop caused by hard kills
+  // (Task Manager, OS crash) where before-quit never runs.
+  killOrphanBackendFromPidFile()
+
   registerOrghumansIpc()
   const systemCa = installWindowsSystemCaTrust(tls)
 
@@ -10971,6 +11026,9 @@ app.on('before-quit', event => {
 
   stopBackendChild(backendConnectionState.getProcess())
   stopAllPoolBackends()
+  // Clean shutdown: remove the PID file so the next launch knows it doesn't
+  // need to kill an orphan (the process was already cleanly terminated above).
+  deleteBackendPidFile()
 })
 
 app.on('window-all-closed', () => {
