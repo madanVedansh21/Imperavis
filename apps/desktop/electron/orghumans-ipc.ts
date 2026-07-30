@@ -291,8 +291,8 @@ print(json.dumps({'ok': True, 'orgs': list_joined_orgs()}))
         )
       } else {
         yaml = yaml.replace(
-          new RegExp(`(^  ${serverKey}:[\\s\\S]*?^    url: )[^\\n]+`, 'm'),
-          `$1"${url}"`
+          /(  composio-integrations:\s+url:\s*")[^"]+(")/,
+          `$1${url}$2`
         )
       }
 
