@@ -52,6 +52,11 @@ ${snippet}
 }
 
 export function registerOrghumansIpc(): void {
+  // Auto-sync MCP config on app launch so config.yaml always has the per-user Composio MCP URL
+  void syncMcpConfigForProfile('default').catch(err => {
+    console.warn('[Orghumans] Auto-sync MCP config on launch failed:', err)
+  })
+
   // ── Org Management ─────────────────────────────────────────────────────────
 
   ipcMain.handle(
@@ -241,6 +246,63 @@ print(json.dumps({'ok': True, 'orgs': list_joined_orgs()}))
     return data.entity_id
   }
 
+  /**
+   * Fetches per-user Composio MCP URL and writes it into config.yaml.
+   * Runs automatically on app launch and whenever an integration is connected.
+   */
+  async function syncMcpConfigForProfile(profileId: string = 'default') {
+    try {
+      const entityId = getOrCreateEntityId(profileId)
+      const hermesHome = getHermesHome()
+
+      const response = await fetch(`${BACKEND_URL}/integrations/mcp-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entity_id: entityId }),
+      })
+      if (!response.ok) {
+        const err = await response.text()
+        return { ok: false, error: `Backend error: ${err}` }
+      }
+      const { url } = (await response.json()) as { url: string }
+      if (!url) return { ok: false, error: 'Backend returned no MCP URL' }
+
+      const configPath = join(hermesHome, 'config.yaml')
+      mkdirSync(hermesHome, { recursive: true })
+
+      let yaml = existsSync(configPath) ? readFileSync(configPath, 'utf-8') : ''
+
+      const serverKey = 'composio-integrations'
+      const hasMcpBlock = /^mcp_servers:/m.test(yaml)
+      const hasOurKey = new RegExp(`^  ${serverKey}:`, 'm').test(yaml)
+
+      const serverEntry = [
+        `  ${serverKey}:`,
+        `    url: "${url}"`,
+        `    transport: streamable_http`,
+      ].join('\n')
+
+      if (!hasMcpBlock) {
+        yaml = yaml.trimEnd() + '\n\nmcp_servers:\n' + serverEntry + '\n'
+      } else if (!hasOurKey) {
+        yaml = yaml.replace(
+          /^mcp_servers:/m,
+          `mcp_servers:\n${serverEntry}`
+        )
+      } else {
+        yaml = yaml.replace(
+          new RegExp(`(^  ${serverKey}:[\\s\\S]*?^    url: )[^\\n]+`, 'm'),
+          `$1"${url}"`
+        )
+      }
+
+      writeFileSync(configPath, yaml, 'utf-8')
+      return { ok: true, hermesHome, configPath, url }
+    } catch (err) {
+      return { ok: false, error: String(err) }
+    }
+  }
+
   // ── Integration IPC handlers ───────────────────────────────────────────────
 
   ipcMain.handle('orghumans:integrations:listAvailable', async () =>
@@ -374,6 +436,8 @@ from orghumans.db.integrations_db import upsert_connection
 upsert_connection(${JSON.stringify(profileId)}, ${JSON.stringify(provider)}, status='active')
 print(json.dumps({'ok': True}))
 `)
+        // Auto-sync writeMcpConfig whenever an integration is connected
+        void syncMcpConfigForProfile(profileId).catch(() => {})
         return { ok: true }
       } catch (err) {
         return { ok: false, error: String(err) }
@@ -394,74 +458,9 @@ print(json.dumps({'ok': True}))
   /**
    * writeMcpConfig: Fetches a per-user Composio MCP URL from the backend and
    * writes it into the correct config.yaml (resolved via getHermesHome()).
-   *
-   * The resolution is dynamic — it will work correctly regardless of whether
-   * the client has HERMES_HOME set (like a D: redirect), uses OrgHumans profiles,
-   * or is on a plain Hermes install. No path is hardcoded.
    */
   ipcMain.handle('orghumans:integrations:writeMcpConfig', async (_event, profileId: string) => {
-    try {
-      const entityId = getOrCreateEntityId(profileId)
-      const hermesHome = getHermesHome()
-
-      // 1. Fetch per-user MCP URL from our Vercel backend proxy
-      const response = await fetch(`${BACKEND_URL}/integrations/mcp-url`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entity_id: entityId }),
-      })
-      if (!response.ok) {
-        const err = await response.text()
-        return { ok: false, error: `Backend error: ${err}` }
-      }
-      const { url } = (await response.json()) as { url: string }
-      if (!url) return { ok: false, error: 'Backend returned no MCP URL' }
-
-      // 2. Read existing config.yaml (if any) and patch mcp_servers block
-      const configPath = join(hermesHome, 'config.yaml')
-      mkdirSync(hermesHome, { recursive: true })
-
-      // Use a minimal yaml write — we only touch the composio-integrations key
-      // and preserve everything else by doing a line-level upsert.
-      // IMPORTANT: Only match an *uncommented* mcp_servers key (starts at column 0,
-      // no leading '#' or whitespace) to avoid being confused by the commented-out
-      // template block that ships inside the default config.yaml.
-      let yaml = existsSync(configPath) ? readFileSync(configPath, 'utf-8') : ''
-
-      const serverKey = 'composio-integrations'
-      // Matches an uncommented top-level mcp_servers: key
-      const hasMcpBlock = /^mcp_servers:/m.test(yaml)
-      // Matches an uncommented composio-integrations: key (indented under mcp_servers)
-      const hasOurKey = new RegExp(`^  ${serverKey}:`, 'm').test(yaml)
-
-      const serverEntry = [
-        `  ${serverKey}:`,
-        `    url: "${url}"`,
-        `    transport: streamable_http`,
-      ].join('\n')
-
-      if (!hasMcpBlock) {
-        // No active mcp_servers block — append a clean one at the end
-        yaml = yaml.trimEnd() + '\n\nmcp_servers:\n' + serverEntry + '\n'
-      } else if (!hasOurKey) {
-        // Active mcp_servers block exists but our key is missing — inject under it
-        yaml = yaml.replace(
-          /^mcp_servers:/m,
-          `mcp_servers:\n${serverEntry}`
-        )
-      } else {
-        // Key already exists — update just the url line in-place
-        yaml = yaml.replace(
-          new RegExp(`(^  ${serverKey}:[\\s\\S]*?^    url: )[^\\n]+`, 'm'),
-          `$1"${url}"`
-        )
-      }
-
-      writeFileSync(configPath, yaml, 'utf-8')
-      return { ok: true, hermesHome, configPath, url }
-    } catch (err) {
-      return { ok: false, error: String(err) }
-    }
+    return syncMcpConfigForProfile(profileId)
   })
 
   // ── Org RBAC Management ───────────────────────────────────────────────────
