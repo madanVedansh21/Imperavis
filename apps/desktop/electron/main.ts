@@ -625,6 +625,49 @@ function deleteBackendPidFile(): void {
   try { fs.rmSync(BACKEND_PID_FILE, { force: true }) } catch { /* ignore */ }
 }
 
+function resolveWatchdogPath(): string | null {
+  const candidates = [
+    path.join(APP_ROOT, 'dist', 'desktop_watchdog.py'),
+    path.join(APP_ROOT, 'electron', 'desktop_watchdog.py'),
+    process.resourcesPath ? path.join(process.resourcesPath, 'desktop_watchdog.py') : null,
+    typeof __dirname !== 'undefined' ? path.join(__dirname, 'desktop_watchdog.py') : null,
+    typeof __dirname !== 'undefined' ? path.join(__dirname, '..', 'electron', 'desktop_watchdog.py') : null,
+  ].filter(Boolean) as string[]
+
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) return candidate
+    } catch {}
+  }
+  return null
+}
+
+function spawnBackendWatchdog(pythonCmd: string, backendPid: number | undefined): void {
+  if (!backendPid || !Number.isFinite(backendPid)) return
+  const scriptPath = resolveWatchdogPath()
+  if (!scriptPath) {
+    rememberLog('[watchdog] Could not find desktop_watchdog.py script; skipping watchdog')
+    return
+  }
+
+  try {
+    const child = spawn(
+      pythonCmd,
+      [scriptPath, String(process.pid), String(backendPid), process.platform],
+      hiddenWindowsChildOptions({
+        stdio: 'ignore',
+        detached: true,
+      })
+    )
+    child.unref()
+    rememberLog(
+      `[watchdog] Spawned python watchdog (PID ${child.pid}) monitoring Electron (PID ${process.pid}) and backend (PID ${backendPid})`
+    )
+  } catch (err: any) {
+    rememberLog(`[watchdog] Failed to spawn watchdog: ${err.message}`)
+  }
+}
+
 const DESKTOP_LOG_FLUSH_MS = 120
 const DESKTOP_LOG_BUFFER_MAX_CHARS = 64 * 1024
 // Bound desktop.log on disk. It is an append-only forensic log, so a boot loop
@@ -8127,6 +8170,7 @@ async function startHermes() {
     // if the current session is hard-killed (Task Manager / GPU crash / power loss)
     // and before-quit never fires. This is the crash-resilient orphan cleanup.
     writeBackendPidFile(hermesProcess.pid)
+    spawnBackendWatchdog(backend.command, hermesProcess.pid)
 
     const processOwner = backendConnectionState.attachProcess(connectionAttempt, hermesProcess)
 

@@ -12,12 +12,15 @@
 import { build } from 'esbuild'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { mkdirSync } from 'node:fs'
+import { copyFileSync, mkdirSync } from 'node:fs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, '..')
 const distDir = resolve(root, 'dist')
 mkdirSync(distDir, { recursive: true })
+try {
+  copyFileSync(resolve(root, 'electron/desktop_watchdog.py'), resolve(distDir, 'desktop_watchdog.py'))
+} catch {}
 
 const mainEntry = resolve(root, 'electron/main.ts')
 const mainOut = resolve(distDir, 'electron-main.mjs')
