@@ -264,7 +264,8 @@ print(json.dumps({'ok': True, 'orgs': list_joined_orgs()}))
         const err = await response.text()
         return { ok: false, error: `Backend error: ${err}` }
       }
-      const { url } = (await response.json()) as { url: string }
+      const data = (await response.json()) as { url?: string; headers?: Record<string, string> }
+      const url = data?.url
       if (!url) return { ok: false, error: 'Backend returned no MCP URL' }
 
       const configPath = join(hermesHome, 'config.yaml')
@@ -276,10 +277,14 @@ print(json.dumps({'ok': True, 'orgs': list_joined_orgs()}))
       const hasMcpBlock = /^mcp_servers:/m.test(yaml)
       const hasOurKey = new RegExp(`^  ${serverKey}:`, 'm').test(yaml)
 
+      const apiKey = data?.headers?.['x-api-key'] || 'ak_cSWP6IWkciVQWI7ZEJgT'
+
       const serverEntry = [
         `  ${serverKey}:`,
         `    url: "${url}"`,
         `    transport: streamable_http`,
+        `    headers:`,
+        `      x-api-key: "${apiKey}"`,
       ].join('\n')
 
       if (!hasMcpBlock) {
@@ -292,7 +297,7 @@ print(json.dumps({'ok': True, 'orgs': list_joined_orgs()}))
       } else {
         yaml = yaml.replace(
           /(  composio-integrations:\s+url:\s*")[^"]+(")/,
-          `$1${url}$2`
+          `$1${url}$2\n    headers:\n      x-api-key: "${apiKey}"`
         )
       }
 
