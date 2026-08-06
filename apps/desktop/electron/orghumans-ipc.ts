@@ -152,6 +152,7 @@ print(json.dumps({'ok': True, 'orgs': list_joined_orgs()}))
     { id: "stripe", name: "Stripe", description: "Query payments, customers, and invoices.", category: "Finance", icon: "💳", color: "#635BFF" },
     { id: "twitter", name: "X / Twitter", description: "Post tweets and read timelines.", category: "Social", icon: "🐦", color: "#1DA1F2" },
     { id: "reddit", name: "Reddit", description: "Read subreddits, submit posts and comments.", category: "Social", icon: "🤖", color: "#FF4500" },
+    { id: "linkedin", name: "LinkedIn", description: "Manage LinkedIn connections and posts.", category: "Social", icon: "👔", color: "#0077B5" },
     { id: "dropbox", name: "Dropbox", description: "Access and share Dropbox files.", category: "Storage", icon: "📦", color: "#0061FF" },
   ]
 
