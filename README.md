@@ -17,48 +17,37 @@ All base agent behavior, tool execution, memory, skills, desktop/chat surfaces, 
 
 ## What Vedansh changed on top of Hermes
 
-Based on the commit range `bfded63d24ad281dc67a190716638de389756870` through `fef9f132a9f1e5979c1fb1ec4f24afacf2546994`, the main Imperavis-specific changes are:
+The real Imperavis-specific work is focused on making Hermes easier to use for non-technical users and teams:
 
-### 1. Personal Composio integration layer
+### 1. One-click Composio integrations
 
-- Reworked the desktop integrations flow around a backend-owned Composio setup instead of asking the local user to paste a Composio API key.
-- Added a secure proxy/MCP flow pointing to Vedansh's integration backend.
-- Added automatic MCP config injection so connected tools become available to the agent after setup.
-- Added stable per-profile `entity_id` handling for user-specific Composio tool access.
+Imperavis adds a simpler account-connection flow for users who do not know what MCP, API keys, or tool configuration are.
 
-### 2. Desktop integrations UI changes
+Instead of asking the user to manually configure Composio or paste keys locally, Imperavis adds a backend-backed integration flow where users can connect apps from the desktop UI and have the agent tools become available automatically.
 
-- Replaced the old API-key modal flow with a simpler account connection UX.
-- Added OAuth pending/confirmation states.
-- Added restart-needed messaging after integrations are connected.
-- Added disconnect handling through desktop IPC.
-- Updated the integration catalog to focus on the apps Vedansh wanted, including Reddit and LinkedIn.
+This includes the custom Composio proxy/MCP wiring used for personal-account integrations such as Gmail, Google apps, Reddit, LinkedIn, GitHub, and other supported apps.
 
-### 3. Composio tool fixes
+### 2. Organization-based profile sync
 
-- Removed a hardcoded Composio API key from the client-side/local code path.
-- Fixed Reddit tool loading and Composio app compatibility issues.
-- Added LinkedIn as a connected social integration option.
-- Adjusted MCP loading so Composio tools can be injected from config/profile state.
+Hermes already had profiles, but Imperavis extends the idea toward an organization workflow.
 
-### 4. Profile and path customization
+With Imperavis, a user can create or join an organization and share an organization code. People inside the same organization can stay synced through the shared organization setup, instead of every person manually configuring their own isolated agent environment.
 
-- Added support for `ORGHUMANS_HOME` alongside `HERMES_HOME`.
-- Adjusted desktop/profile path resolution for Vedansh's local setup.
-- Updated config polling/loading behavior so the desktop app and CLI pick up generated MCP config.
+The goal is to make the agent usable for non-technical clients and teams: one organization setup, shared code, synced members.
 
-### 5. Desktop stability fixes
+### 3. Desktop integrations UI
 
-- Added crash-resilient cleanup for orphaned backend processes using a PID file.
-- Added a Python watchdog process to kill the backend when the Electron desktop process is hard-killed.
-- Fixed packaged Electron path/preload resolution issues.
-- Improved renderer loading fallback behavior for packaged desktop builds.
+Imperavis updates the desktop integrations experience so account connections feel like normal app connections instead of developer configuration.
 
-### 6. Light rebranding/personalization
+This includes a cleaner integrations catalog, OAuth-style connection states, and disconnect handling through the desktop app.
 
-- Changed some visible naming/copy from Hermes/OrgHumans toward Vedansh's personal-agent setup.
-- Updated prompt identity text for the customized agent.
-- Removed/rewrote parts of the previous README that over-claimed unrelated product features.
+### 4. Desktop stability fixes
+
+Imperavis includes desktop-side reliability fixes for packaged app usage, including safer backend process cleanup and watchdog behavior so the local backend does not get orphaned when the desktop app is killed.
+
+### 5. Light personal rebranding
+
+Some visible naming, copy, and agent identity text were changed from the upstream Hermes/OrgHumans defaults toward Vedansh's personal-agent setup.
 
 ## What remains Hermes
 
@@ -82,4 +71,4 @@ Built/customized by **Vedansh Madan** for his personal workflow.
 
 ## License
 
-This fork follows the upstream Hermes Agent license where applicable. See the repository license and upstream Hermes Agent for full details.
+This fork follows the upstream Hermes Agent license where applicable. See this repository's license and upstream Hermes Agent for full details.
