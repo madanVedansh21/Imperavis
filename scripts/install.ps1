@@ -2159,6 +2159,39 @@ except Exception:
             throw "Baseline imports failed in $InstallDir\venv (dotenv/openai/rich/prompt_toolkit). The install completed but dependencies are not in the venv. $hint"
         }
         Write-Success "Baseline imports verified in venv"
+
+        # Cryptography integrity check -- on Windows, uv falls back from hardlinks to
+        # file-copy when the cache and target are on different filesystems (e.g. cache on
+        # C:\ but install on D:\). This copy path can produce a partial cryptography install
+        # that is missing exceptions.py (the Rust-backed submodule). The package appears
+        # installed (dist-info exists) but `from cryptography.exceptions import ...` raises
+        # ModuleNotFoundError, crashing the backend at startup via bitwarden.py.
+        # We detect this here and force-reinstall cryptography before the user ever hits it.
+        $prevEAP = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        & $venvPython -c "from cryptography.hazmat.primitives.ciphers.aead import AESGCM; from cryptography.exceptions import UnsupportedAlgorithm" 2>&1 | Out-Null
+        $cryptoExitCode = $LASTEXITCODE
+        $ErrorActionPreference = $prevEAP
+        if ($cryptoExitCode -ne 0) {
+            Write-Warn "cryptography package is installed but missing submodules (common on Windows cross-filesystem installs). Force-reinstalling..."
+            $env:UV_PROJECT_ENVIRONMENT = "$InstallDir\venv"
+            Invoke-NativeWithRelaxedErrorAction { & $UvCmd pip install --python $venvPython --force-reinstall cryptography==46.0.7 }
+            if ($LASTEXITCODE -eq 0) {
+                # Re-verify after repair
+                $prevEAP = $ErrorActionPreference
+                $ErrorActionPreference = "Continue"
+                & $venvPython -c "from cryptography.hazmat.primitives.ciphers.aead import AESGCM; from cryptography.exceptions import UnsupportedAlgorithm" 2>&1 | Out-Null
+                $cryptoRecheckCode = $LASTEXITCODE
+                $ErrorActionPreference = $prevEAP
+                if ($cryptoRecheckCode -eq 0) {
+                    Write-Success "cryptography reinstalled successfully"
+                } else {
+                    Write-Warn "cryptography still not importable after reinstall. Run manually: uv pip install --python `"$venvPython`" --force-reinstall cryptography==46.0.7"
+                }
+            } else {
+                Write-Warn "cryptography force-reinstall failed. Run manually: uv pip install --python `"$venvPython`" --force-reinstall cryptography==46.0.7"
+            }
+        }
     }
 
     if (-not $NoVenv) {
