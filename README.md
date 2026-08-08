@@ -1,80 +1,85 @@
-# OrgHumans ☤
+# Imperavis
 
-> **The AI Desktop Agent & Collaboration Platform for Teams & Organisations**
+> A personal AI agent built by **Vedansh Madan** on top of [Nous Research's Hermes Agent](https://github.com/NousResearch/hermes-agent).
 
-OrgHumans is an autonomous AI desktop agent built with a **Liquid Glass UI**, **Composio 1-Click Third-Party Integrations** (Gmail, Google Calendar, Reddit, Slack, GitHub, Linear, Jira, Notion, and 250+ others), **Profile & Workspace Isolation**, and **Composio Role-Based Access Control (RBAC)**.
+Imperavis is Vedansh's personal fork/customization of Hermes Agent. It keeps the Hermes agent runtime, desktop app, MCP/tooling system, skills, memory, provider support, and most of the core product exactly as Hermes provides it.
 
----
+This README was updated by **Imperavis itself** — the personal agent running from this repository — to clearly separate Vedansh's custom additions from the upstream Hermes work.
 
-## ✨ Core Features
+## Upstream credit
 
-<table>
-<tr><td><b>Liquid Glass Desktop Interface</b></td><td>Sleek dark-mode desktop UI (`#0a0a0a` void base, `#7c6bff` violet accent, Inter font) built on Electron + React with smooth micro-animations.</td></tr>
-<tr><td><b>Composio 1-Click Integrations</b></td><td>Connect personal and work accounts (Gmail, Google Calendar, Google Drive, Reddit, Slack, Discord, GitHub, Linear, Jira, Notion) in 1 click via Composio OAuth.</td></tr>
-<tr><td><b>Organisation & Profile Isolation</b></td><td>Separate personal and team profiles. Each workspace maintains its own isolated context, memory, skills, and encrypted environment credentials.</td></tr>
-<tr><td><b>Granular Member RBAC</b></td><td>Organisation owners can assign `can_read` and `can_write` permissions per integration to team members. The agent automatically enforces permissions before executing tools.</td></tr>
-<tr><td><b>System Prompt Context Injection</b></td><td>Automatically appends organisation identity, brand voice, team handles, brand glossary, and GitHub repositories into system prompts with zero cross-profile leakage.</td></tr>
-<tr><td><b>Local-First Peer Sync</b></td><td>HMAC-SHA256 authenticated, AES-256-GCM encrypted delta replication across peer nodes and team devices over WebSockets/TCP.</td></tr>
-</table>
+Imperavis is **not a from-scratch agent framework**. Around 99% of the core capability comes from upstream Hermes Agent:
 
----
+- Repository: https://github.com/NousResearch/hermes-agent
+- Docs: https://hermes-agent.nousresearch.com/docs
 
-## 🚀 Quick Start
+All base agent behavior, tool execution, memory, skills, desktop/chat surfaces, MCP support, provider abstraction, and multi-platform architecture should be credited to Hermes Agent / Nous Research unless explicitly listed below as an Imperavis-specific customization.
 
-### 1. Run in Development Mode (Electron Desktop App)
+## What Vedansh changed on top of Hermes
 
-```powershell
-# Navigate to desktop app directory
-cd apps/desktop
+Based on the commit range `bfded63d24ad281dc67a190716638de389756870` through `fef9f132a9f1e5979c1fb1ec4f24afacf2546994`, the main Imperavis-specific changes are:
 
-# Install dependencies and launch dev server
-npm install
-npm run dev
-```
+### 1. Personal Composio integration layer
 
-### 2. Run the CLI Engine
+- Reworked the desktop integrations flow around a backend-owned Composio setup instead of asking the local user to paste a Composio API key.
+- Added a secure proxy/MCP flow pointing to Vedansh's integration backend.
+- Added automatic MCP config injection so connected tools become available to the agent after setup.
+- Added stable per-profile `entity_id` handling for user-specific Composio tool access.
 
-```powershell
-python cli.py
-```
+### 2. Desktop integrations UI changes
 
-### 3. Build Production Windows Executable (`.exe`)
+- Replaced the old API-key modal flow with a simpler account connection UX.
+- Added OAuth pending/confirmation states.
+- Added restart-needed messaging after integrations are connected.
+- Added disconnect handling through desktop IPC.
+- Updated the integration catalog to focus on the apps Vedansh wanted, including Reddit and LinkedIn.
 
-```powershell
-cd apps/desktop
-npm run dist:win
-```
+### 3. Composio tool fixes
 
-The standalone installer will be built inside `apps/desktop/dist/OrgHumans Setup 0.17.0.exe`.
+- Removed a hardcoded Composio API key from the client-side/local code path.
+- Fixed Reddit tool loading and Composio app compatibility issues.
+- Added LinkedIn as a connected social integration option.
+- Adjusted MCP loading so Composio tools can be injected from config/profile state.
 
----
+### 4. Profile and path customization
 
-## 🔑 Composio Integration Setup
+- Added support for `ORGHUMANS_HOME` alongside `HERMES_HOME`.
+- Adjusted desktop/profile path resolution for Vedansh's local setup.
+- Updated config polling/loading behavior so the desktop app and CLI pick up generated MCP config.
 
-OrgHumans comes pre-configured with a master developer Composio key (`ak_...`) for zero-friction end-user onboarding.
+### 5. Desktop stability fixes
 
-1. Open **OrgHumans Desktop**.
-2. Click the **Integrations** icon (plug icon in top-left sidebar).
-3. Tap **Connect →** next to **Gmail**, **Google Calendar**, **Reddit**, **Slack**, or **GitHub**.
-4. Complete standard 1-click OAuth in your browser.
-5. Your agent is instantly empowered to manage emails, events, posts, and repositories!
+- Added crash-resilient cleanup for orphaned backend processes using a PID file.
+- Added a Python watchdog process to kill the backend when the Electron desktop process is hard-killed.
+- Fixed packaged Electron path/preload resolution issues.
+- Improved renderer loading fallback behavior for packaged desktop builds.
 
----
+### 6. Light rebranding/personalization
 
-## 🏢 Organisation & Team Collaboration
+- Changed some visible naming/copy from Hermes/OrgHumans toward Vedansh's personal-agent setup.
+- Updated prompt identity text for the customized agent.
+- Removed/rewrote parts of the previous README that over-claimed unrelated product features.
 
-- **Create Organisation**: Click `+` on the sidebar → **+ Create Organisation** → Name your org & copy the invite key (`XXXX-XXXX-XXXX`).
-- **Join Organisation**: Click `+` on the sidebar → **+ Join Organisation** → Paste invite key.
-- **Team Permissions**: Manage member access (`@username`) per connected integration under Team & RBAC Settings.
+## What remains Hermes
 
----
+Everything not listed above should be treated as upstream Hermes Agent functionality, including but not limited to:
 
-## 🛡️ Privacy & Encryption
+- Core agent loop and tool calling
+- Skills and memory system
+- MCP server support
+- Desktop app foundation
+- CLI and session handling
+- Provider/model support
+- Background tasks, cron, delegation, and general automation architecture
+- Most UI surfaces and agent infrastructure
 
-All OAuth tokens and API keys stored on disk by OrgHumans are encrypted at rest with AES-256-GCM. Workspace databases (`identity.db`, `members.db`, `integrations.db`) reside locally on your machine (`~/.orghumans/`).
+## Author
 
----
+Built/customized by **Vedansh Madan** for his personal workflow.
 
-## 📄 License
+- GitHub: https://github.com/madanVedansh21
+- LinkedIn: https://www.linkedin.com/in/vedansh-madan-100a49312
 
-OrgHumans is distributed under the MIT License.
+## License
+
+This fork follows the upstream Hermes Agent license where applicable. See the repository license and upstream Hermes Agent for full details.
